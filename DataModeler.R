@@ -29,7 +29,7 @@ library(stringr)
 library(rpart.plot)
 
 #Adjusts the working directory as needed
-setwd("~/Documents/github/RDataModeler")
+#setwd("~/Documents/github/RDataModeler")
 
 #Loads the base data file into a data frame
 createBaseDF <- function(baseCSVFile) {
