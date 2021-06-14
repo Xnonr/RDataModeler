@@ -86,6 +86,29 @@ adjustBaseDF <- function(predefinedToRemoveColumnsList, baseDF) {
    return(adjustedDF)
 }
 
+selectVariableToPredict <- function(adjustedDF) {
+   availableColumns <- obtainColumnNames(adjustedDF)
+   
+   done <- FALSE
+   while (done == FALSE) {
+      print('Available Columns: ')
+      print(availableColumns)
+      
+      columnToPredict <- readline(prompt = 'Type in the name of the column whose variable you wish predict: ')
+      
+      if (columnToPredict %in% availableColumns == TRUE) {
+         print(paste('The following variable column has been selected for prediction: ', columnToPredict))
+         done <- TRUE
+      }
+      
+      else if (columnToPredict %in% availableColumns == FALSE) {
+         print('This column is currently not available for prediction.')
+      }
+   }
+   
+   return(columnToPredict)
+}
+
 #Changes the following relevant variable columns into factors as directed
 factorizeDF <- function(toFactorizeDF) {
    for (col in 1:ncol(toFactorizeDF)) {
@@ -144,12 +167,13 @@ printCMResultsQuestionaire <- function() {
    }
 }
 
-#Creates a base from the actual test data frame churn for easy model comparison
-createBaseResults <- function(trainTestDFsList) {
+#Creates a base from the actual test data frame's desired variable to predict
+#for easy model comparison
+createBaseResults <- function(trainTestDFsList, variableToPredict) {
    testingDF <- trainTestDFsList$testDF
 
-   baseTP <- sum(str_count(testingDF$Churn, 'Yes'))
-   baseTN <- sum(str_count(testingDF$Churn, 'No'))
+   baseTP <- sum(str_count(testingDF[, variableToPredict], 'Yes'))
+   baseTN <- sum(str_count(testingDF[, variableToPredict], 'No'))
    baseFP <- 0
    baseFN <- 0
 
@@ -169,12 +193,16 @@ createBaseResults <- function(trainTestDFsList) {
 }
 
 #Decision Tree Model
-createDecisionTreeModel <- function(trainTestDFsList, printCMResults) {
+createDecisionTreeModel <- function(trainTestDFsList, 
+                                    variableToPredict, 
+                                    printCMResults) {
    testingDF <- trainTestDFsList$testDF
    trainingDF <- trainTestDFsList$trainDF
 
-   #Grows the Tree, with 'Churn' as the variable attempting to be modeled
-   treeFit <- rpart(Churn ~ ., #Formula uses all data frame variables
+   #Creates the formula using all other variables
+   treeFormula <- paste(variableToPredict, '~ .')
+   #Grows the Tree, attempting to be model the desired variable to predict
+   treeFit <- rpart(formula = treeFormula,
                     data = trainingDF,
                     method = "class",
                     control = rpart.control(xval = 10, minsplit = 50),
@@ -184,7 +212,7 @@ createDecisionTreeModel <- function(trainTestDFsList, printCMResults) {
    #Extracts the vector of predicted class for each observation in 'testingDF'
    treePred <- predict(treeFit, testingDF, type = "class")
    #Extracts the actual class of each observation in 'testingDF'
-   treeActual <- testingDF$Churn
+   treeActual <- testingDF[, variableToPredict]
 
    #Builds the confusion matrix 'treeCM', otherwise known as the contingency
    #matrix of predicted vs actual
@@ -216,7 +244,8 @@ createDecisionTreeModel <- function(trainTestDFsList, printCMResults) {
    #Plots the decision tree in a more aesthetically pleasing fashion
    rpart.plot(treeFit, type = 1,
               extra = 1,
-              main = "Classification Tree for 'Churn' Prediction")
+              main = paste('Classification Tree Prediction for: ', 
+                           variableToPredict))
 
    #Prints out the confusion matrix 'treeCM', using the predicted
    #before actual results, along with margins
@@ -243,11 +272,15 @@ createDecisionTreeModel <- function(trainTestDFsList, printCMResults) {
 }
 
 #Logistic Regression Model
-createLogisticRegressionModel <- function(trainTestDFsList, printCMResults) {
+createLogisticRegressionModel <- function(trainTestDFsList, 
+                                          variableToPredict, 
+                                          printCMResults) {
    testingDF <- trainTestDFsList$testDF
    trainingDF <- trainTestDFsList$trainDF
 
-   logitReg <- glm(Churn ~ ., #Formula uses all data frame variables
+   logitRegFormula <- paste(variableToPredict, '~ .')
+   
+   logitReg <- glm(formula = logitRegFormula,
                    data = trainingDF,
                    family = "binomial")
 
@@ -255,14 +288,14 @@ createLogisticRegressionModel <- function(trainTestDFsList, printCMResults) {
    logitRegPred <- predict(logitReg, testingDF, type = "response")
    testingDF$logitRegPred <- logitRegPred
    #Chooses 0.5 as the cutoff for 1 VS. 0 classes
-   testingDF$logitRegChurnPred <- ifelse(testingDF$logitRegPred > 0.5, 1, 0)
+   testingDF$logitRegVariablePred <- ifelse(testingDF$logitRegPred > 0.5, 1, 0)
 
-   logitRegPred <- testingDF$logitRegChurnPred
-   logitRegActual <- testingDF$Churn
+   logitRegPred <- testingDF$logitRegVariablePred
+   logitRegActual <- testingDF[, variableToPredict]
    logitRegCM <- table(logitRegPred, logitRegActual)
 
    testingDF <- testingDF[, !(names(testingDF) %in% c("logitRegPred",
-                                                      "logitRegChurnPred"))]
+                                                      "logitRegVariablePred"))]
 
    logitRegTP <- logitRegCM[2,2]
    logitRegTN <- logitRegCM[1,1]
@@ -302,19 +335,31 @@ createLogisticRegressionModel <- function(trainTestDFsList, printCMResults) {
 }
 
 #K-Nearest Neighbors Model
-createKNearestNeighborsModel <- function(trainTestDFsList, printCMResults) {
+createKNearestNeighborsModel <- function(trainTestDFsList, 
+                                         variableToPredict, 
+                                         printCMResults) {
    testingDF <- trainTestDFsList$testDF
    trainingDF <- trainTestDFsList$trainDF
 
    knnCtrl <- trainControl(method = "cv", number = 10)
 
-   knnFit <- train(Churn ~ ., data = trainingDF, method = "knn",
-                   trControl = knnCtrl, preProcess = c("center","scale"),
+   knnFormula <- as.formula(paste(variableToPredict, ' ~ .', sep = ''))
+   
+   knnFit <- train(knnFormula, 
+                   data = trainingDF, 
+                   method = "knn", 
+                   trControl = knnCtrl, 
+                   preProcess = c("center", "scale"), 
                    tuneGrid = expand.grid(k = 1:10))
    plot(knnFit)
 
    knnPred <- predict(knnFit, testingDF)
-   knnActual <- testingDF$Churn
+   knnActual <- testingDF[, variableToPredict]
+   
+   #Explicitly selecting a specific column directly versus indirectly via a 
+   #variable results in very minor variations in final output predictive results
+   #knnActual <- testingDF$Churn
+   
    knnCM <- table(knnPred, knnActual)
 
    knnTP <- knnCM[2,2]
@@ -353,16 +398,20 @@ createKNearestNeighborsModel <- function(trainTestDFsList, printCMResults) {
 }
 
 #Naive Bayes Classifier Model
-createNaiveBayesClassifierModel <- function(trainTestDFsList, printCMResults) {
+createNaiveBayesClassifierModel <- function(trainTestDFsList, 
+                                            variableToPredict, 
+                                            printCMResults) {
    testingDF <- trainTestDFsList$testDF
    trainingDF <- trainTestDFsList$trainDF
 
-   nBayesFit <- naiveBayes(Churn ~ ., #Formula uses all data frame variables
+   nBayesFormula <- as.formula(paste(variableToPredict, ' ~ .', sep = ''))
+   
+   nBayesFit <- naiveBayes(formula = nBayesFormula,
                            data = trainingDF)
 
    nBayesPred <- predict(nBayesFit, testingDF, type = "raw")
    nBayesPredClass <- predict(nBayesFit, testingDF, type = "class")
-   nBayesActual <- testingDF$Churn
+   nBayesActual <- testingDF[, variableToPredict]
    nBayesCM <- table(nBayesPredClass, nBayesActual)
 
    nBayesTP <- nBayesCM[2,2]
@@ -556,10 +605,14 @@ main <- function(autoTest) {
                                          'PaperlessBilling', 'PaymentMethod')
       
       adjustedDF <- adjustBaseDF(predefinedToRemoveColumnsList, baseDF)
+      
+      variableToPredict <- 'Churn'
    }
+   
    else {
       baseDF <- createBaseDF()
       adjustedDF <- adjustBaseDF(NULL, baseDF)
+      variableToPredict <- selectVariableToPredict(adjustedDF)
    }
 
    factorizedDF <- factorizeDF(adjustedDF)
@@ -570,20 +623,40 @@ main <- function(autoTest) {
       printResults <- printCMResultsQuestionaire()
    }
 
-   bR <- createBaseResults(trainTestDFsList)
-   dtMR <- createDecisionTreeModel(trainTestDFsList, printResults)
-   lgMR <- createLogisticRegressionModel(trainTestDFsList, printResults)
-   knnMR <- createKNearestNeighborsModel(trainTestDFsList, printResults)
-   nbMR <- createNaiveBayesClassifierModel(trainTestDFsList, printResults)
+   bR <- createBaseResults(trainTestDFsList, variableToPredict)
+   
+   dtMR <- createDecisionTreeModel(trainTestDFsList, 
+                                   variableToPredict, 
+                                   printResults)
+   
+   lgMR <- createLogisticRegressionModel(trainTestDFsList, 
+                                         variableToPredict, 
+                                         printResults)
+   
+   knnMR <- createKNearestNeighborsModel(trainTestDFsList, 
+                                         variableToPredict, 
+                                         printResults)
+   
+   nbMR <- createNaiveBayesClassifierModel(trainTestDFsList, 
+                                           variableToPredict, 
+                                           printResults)
+   
    eMR <- createEnsembleMethodsModel(dtMR, lgMR, knnMR, nbMR, bR,
                                      trainTestDFsList, printResults)
 }
 
 main(TRUE)
 
-baseDF <- createBaseDF('Telco_Customer_Churn.csv')
-predefinedToRemoveColumnsList <- c('customerID', 'TotalCharges', 
-                                   'PaperlessBilling', 'PaymentMethod')
-adjustedDF <- adjustBaseDF(predefinedToRemoveColumnsList, baseDF)
-factorizedDF <- factorizeDF(adjustedDF)
-trainTestDFsList <- splitIntoTrainingTestingDFs(factorizedDF)
+#For manual debugging & testing purposes
+# baseDF <- createBaseDF('Telco_Customer_Churn.csv')
+# predefinedToRemoveColumnsList <- c('customerID', 'TotalCharges', 'PaperlessBilling', 'PaymentMethod')
+# predefinedVariableToPredict <- 'Churn'
+# adjustedDF <- adjustBaseDF(predefinedToRemoveColumnsList, baseDF)
+# variableToPredict <- selectVariableToPredict(adjustedDF)
+# factorizedDF <- factorizeDF(adjustedDF)
+# trainTestDFsList <- splitIntoTrainingTestingDFs(factorizedDF)
+# bR <- createBaseResults(trainTestDFsList, variableToPredict)
+# dtMR <- createDecisionTreeModel(trainTestDFsList, variableToPredict, TRUE)
+# lgMR <- createLogisticRegressionModel(trainTestDFsList, variableToPredict, TRUE)
+# knnMR <- createKNearestNeighborsModel(trainTestDFsList, variableToPredict, TRUE)
+# nbMR <- createNaiveBayesClassifierModel(trainTestDFsList, variableToPredict, TRUE)
