@@ -172,8 +172,12 @@ printCMResultsQuestionaire <- function() {
 createBaseResults <- function(trainTestDFsList, variableToPredict) {
    testingDF <- trainTestDFsList$testDF
 
-   baseTP <- sum(str_count(testingDF[, variableToPredict], 'Yes'))
-   baseTN <- sum(str_count(testingDF[, variableToPredict], 'No'))
+   uniqueValues <- unique(testingDF[, variableToPredict])
+   uniqueValue1 <- as.character(uniqueValues[1])
+   uniqueValue2 <- as.character(uniqueValues[2])
+
+   baseTP <- sum(str_count(testingDF[, variableToPredict], uniqueValue1))
+   baseTN <- sum(str_count(testingDF[, variableToPredict], uniqueValue2))
    baseFP <- 0
    baseFN <- 0
 
@@ -646,7 +650,7 @@ main <- function(autoTest) {
                                      trainTestDFsList, printResults)
 }
 
-main(FALSE)
+main(TRUE)
 
 #For manual debugging & testing purposes
 # baseDF <- createBaseDF('Telco_Customer_Churn.csv')
