@@ -610,7 +610,8 @@ main <- function(autoTest) {
    }
    
    else {
-      baseDF <- createBaseDF()
+      csvFileName <- readline(prompt = 'Type in the name of .csv file you would like to have read: ')
+      baseDF <- createBaseDF(csvFileName)
       adjustedDF <- adjustBaseDF(NULL, baseDF)
       variableToPredict <- selectVariableToPredict(adjustedDF)
    }
@@ -645,7 +646,7 @@ main <- function(autoTest) {
                                      trainTestDFsList, printResults)
 }
 
-main(TRUE)
+main(FALSE)
 
 #For manual debugging & testing purposes
 # baseDF <- createBaseDF('Telco_Customer_Churn.csv')
