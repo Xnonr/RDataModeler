@@ -17,7 +17,7 @@ cat("\014") #Clears the R Studio Console
 #install.packages('rpart.plot')
 
 library(dplyr)
-library(plyr)
+#library(plyr)
 library(e1071)
 library(caret)
 library(rpart)
