@@ -491,12 +491,12 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
    ensembleDF$nBayesChurnPred <- as.numeric(ensembleDF$nBayesChurnPred)
 
    #Calculates 2 Vote Combinations' Summed Accuracy
-   treeLogReg <- dtR$dtAcc + lgR$lgAcc #1100
-   treeKnn <- dtR$dtAcc  + knnR$knnAcc #1010
-   treeNBayes <- dtR$dtAcc  + nbR$nbAcc #1001
-   logRegKnn <- lgR$lgAcc + knnR$knnAcc #0110
-   logRegNBayes <- lgR$lgAcc + nbR$nbAcc #0101
-   knnNBayes <- knnR$knnAcc + nbR$nbAcc #0011
+   treeLogReg <- dtR$dtBalAcc + lgR$lgBalAcc #1100
+   treeKnn <- dtR$dtBalAcc  + knnR$knnBalAcc #1010
+   treeNBayes <- dtR$dtBalAcc  + nbR$nbBalAcc #1001
+   logRegKnn <- lgR$lgBalAcc + knnR$knnBalAcc #0110
+   logRegNBayes <- lgR$lgBalAcc + nbR$nbBalAcc #0101
+   knnNBayes <- knnR$knnBalAcc + nbR$nbBalAcc #0011
 
    #Calculates which 2 vote combinations trump their opposites
    treeLogRegVSknnNBayes <- treeLogReg - knnNBayes #1100 vs 0011 #1100 Wins
