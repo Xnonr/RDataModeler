@@ -624,7 +624,13 @@ getArguments <- function() {
          print('There are too many arguments. Please try again.')
       }
       
-      if (numArguments == 0) {
+      else if (((toupper(arg1) == TRUE | toupper(arg1) == FALSE) & 
+                (toupper(arg2) == TRUE | toupper(arg2) == FALSE)) | 
+               (grepl('.csv', arg1) == TRUE & grepl('.csv', arg2) == TRUE)) {
+         print('Arguments have been repeated too many times. Please try again.')
+      }
+      
+      else if (numArguments == 0) {
          print('No arguments detected.')
          print('Defaulting to autoTest = TRUE.')
          print('Defaulting to csvFileName = Telco_Customer_Churn.csv.')
@@ -651,7 +657,7 @@ getArguments <- function() {
             done <- TRUE
          }
          else {
-            print('Invalid arguments detected, please try again.')
+            print('Invalid arguments detected. Please try again.')
          }
       }
       else if (numArguments == 2) {
