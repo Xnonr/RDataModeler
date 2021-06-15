@@ -29,7 +29,7 @@ library(stringr)
 library(rpart.plot)
 
 #Adjusts the working directory as needed
-#setwd("~/Documents/github/RDataModeler")
+#setwd("~/Documents/github/RDataModeler/src")
 
 #Loads the base data file into a data frame
 createBaseDF <- function(baseCSVFile) {
@@ -54,7 +54,7 @@ filterColumns <- function(baseDF) {
       print('Removable Columns: ')
       print(availableColumns)
       
-      columnToRemove <- readline(prompt = "Type in 'D' if done: ")
+      columnToRemove <- readInputs("Type in 'D' if done: ")
       
       if (columnToRemove == 'D') {
          done <- TRUE
@@ -94,7 +94,7 @@ selectVariableToPredict <- function(adjustedDF) {
       print('Available Columns: ')
       print(availableColumns)
       
-      columnToPredict <- readline(prompt = 'Type in the name of the column whose variable you wish predict: ')
+      columnToPredict <- readInputs('Type in the name of the column whose variable you wish predict: ')
       
       if (columnToPredict %in% availableColumns == TRUE) {
          print(paste('The following variable column has been selected for prediction: ', columnToPredict))
@@ -145,7 +145,7 @@ splitIntoTrainingTestingDFs <- function(toSplitDF) {
 printCMResultsQuestionaire <- function() {
    i = 0
    while (i != 1) {
-      decision <- readline(prompt = "Would you like to print out the Model's Confusion Matrix & Results? (Y | N): ")
+      decision <- readInputs("Would you like to print out the Model's Confusion Matrix & Results? (Y | N): ")
 
       if (is.character(decision) == FALSE) {
          print("This input is invalid. Please try again.")
@@ -601,8 +601,91 @@ compareDFs <- function(testDF, trueDF) {
    return(equal)
 }
 
-main <- function(autoTest) {
-   if (autoTest) {
+#Verifies for acceptable arguments passed in by the user to prevent errors
+getArguments <- function() {
+   done <- FALSE
+   while (done == FALSE) {
+      startMessage <- "Enter 2 Arguments: The value of autoTest (TRUE | FALSE) and the .csv file's name: "
+      if (interactive() == FALSE) {
+         print(startMessage)
+         arguments <- commandArgs(trailingOnly = TRUE)
+         print(arguments)
+      }
+      else {
+         argumentsString <- readline(prompt = startMessage)
+         arguments <- unlist(strsplit(argumentsString, split = ' '))
+      }
+      
+      numArguments <- length(arguments)
+      arg1 <- arguments[1]
+      arg2 <- arguments[2]
+      
+      if (numArguments >= 3) {
+         print('There are too many arguments. Please try again.')
+      }
+      
+      if (numArguments == 0) {
+         print('No arguments detected.')
+         print('Defaulting to autoTest = TRUE.')
+         print('Defaulting to csvFileName = Telco_Customer_Churn.csv.')
+         
+         arg1 <- TRUE
+         arg2 <- 'NA'
+         done <- TRUE
+      }
+      else if (numArguments == 1) {
+         if (grepl('.csv', arg1)) {
+            arg2 <- arg1
+            arg1 <- FALSE
+            
+            print(paste('Detected following csvFileName: ', arg2))
+            print('Defaulting to autoTest = FALSE.')
+            
+            done <- TRUE
+         }
+         else if (toupper(arg1) == TRUE | toupper(arg1) == FALSE) {
+            print(paste('Detected following autoTest: ', arg1))
+            
+            arg2 <- 'NA'
+            
+            done <- TRUE
+         }
+         else {
+            print('Invalid arguments detected, please try again.')
+         }
+      }
+      else if (numArguments == 2) {
+         if (grepl('.csv', arg1)) {
+            arg2 <- arg1
+            arg1 <- arguments[2]
+         }
+         done <- TRUE
+      }
+   }
+   arguments[1] <- as.logical(toupper(arg1))
+   arguments[2] <- arg2
+   return(arguments)
+}
+
+readInputs <- function(promptMessage) {
+   if (interactive() == TRUE) {
+      inputs <- readline(prompt = promptMessage)
+   }
+   else {
+      cat(promptMessage)
+      inputs <- readLines("stdin", n = 1)
+   }
+   return(inputs)
+}
+
+main <- function() {
+   arguments <- getArguments()
+   autoTest <- arguments[1]
+   print(autoTest)
+   csvFileName <- arguments[2]
+   print(csvFileName)
+   
+   if (autoTest == TRUE) {
       baseDF <- createBaseDF('Telco_Customer_Churn.csv')
       
       predefinedToRemoveColumnsList <- c('customerID', 'TotalCharges', 
@@ -614,7 +697,15 @@ main <- function(autoTest) {
    }
    
    else {
-      csvFileName <- readline(prompt = 'Type in the name of .csv file you would like to have read: ')
+      if (csvFileName == 'NA') {
+         if (interactive() == TRUE) {
+            csvFileName <- readline(prompt = 'Type in the name of .csv file you would like to have read: ')
+         }
+         else {
+            cat('Type in the name of .csv file you would like to have read: ')
+            csvFileName <- readLines("stdin", n = 1)
+         }
+      }
       baseDF <- createBaseDF(csvFileName)
       adjustedDF <- adjustBaseDF(NULL, baseDF)
       variableToPredict <- selectVariableToPredict(adjustedDF)
@@ -623,8 +714,8 @@ main <- function(autoTest) {
    factorizedDF <- factorizeDF(adjustedDF)
    trainTestDFsList <- splitIntoTrainingTestingDFs(factorizedDF)
 
-   printResults = TRUE
-   if (!autoTest) {
+   printResults <- TRUE
+   if (autoTest == FALSE) {
       printResults <- printCMResultsQuestionaire()
    }
 
@@ -650,7 +741,7 @@ main <- function(autoTest) {
                                      trainTestDFsList, printResults)
 }
 
-main(TRUE)
+main()
 
 #For manual debugging & testing purposes
 # baseDF <- createBaseDF('Telco_Customer_Churn.csv')
