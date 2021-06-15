@@ -624,12 +624,6 @@ getArguments <- function() {
          print('There are too many arguments. Please try again.')
       }
       
-      else if (((toupper(arg1) == TRUE | toupper(arg1) == FALSE) & 
-                (toupper(arg2) == TRUE | toupper(arg2) == FALSE)) | 
-               (grepl('.csv', arg1) == TRUE & grepl('.csv', arg2) == TRUE)) {
-         print('Arguments have been repeated too many times. Please try again.')
-      }
-      
       else if (numArguments == 0) {
          print('No arguments detected.')
          print('Defaulting to autoTest = TRUE.')
@@ -639,6 +633,7 @@ getArguments <- function() {
          arg2 <- 'NA'
          done <- TRUE
       }
+      
       else if (numArguments == 1) {
          if (grepl('.csv', arg1)) {
             arg2 <- arg1
@@ -660,6 +655,13 @@ getArguments <- function() {
             print('Invalid arguments detected. Please try again.')
          }
       }
+      
+      else if (((toupper(arg1) == TRUE | toupper(arg1) == FALSE) & 
+                (toupper(arg2) == TRUE | toupper(arg2) == FALSE)) | 
+               (grepl('.csv', arg1) == TRUE & grepl('.csv', arg2) == TRUE)) {
+         print('Arguments have been repeated too many times. Please try again.')
+      }
+      
       else if (numArguments == 2) {
          if (grepl('.csv', arg1)) {
             arg2 <- arg1
