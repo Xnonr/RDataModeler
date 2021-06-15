@@ -8,5 +8,8 @@ WORKDIR /src
 
 COPY src/ .
 
-CMD ["Rscript", "DataModeler.R"]
+ENV auto='FALSE'
+ENV csv='Telco_Customer_Churn.csv'
+
+CMD ["Rscript", "DataModeler.R", ${auto}, ${csv}]
 
