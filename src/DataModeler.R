@@ -31,6 +31,12 @@ library(rpart.plot)
 #Adjusts the working directory as needed
 #setwd("~/Documents/github/RDataModeler/src")
 
+#CONSTANTS
+SENSITIVITY <- 1
+SPECIFICITY <- 2
+ACCURACY <- 3
+BALANCEDACCURACY <- 4
+
 #Loads the base data file into a data frame
 createBaseDF <- function(baseCSVFile) {
    baseDF <- read.csv(file = baseCSVFile, stringsAsFactors = FALSE)
@@ -142,7 +148,7 @@ splitIntoTrainingTestingDFs <- function(toSplitDF) {
 }
 
 #Asks whether or not the user would like to print out the Model CM & its Results
-printCMResultsQuestionaire <- function() {
+printTFQuestionaire <- function() {
    i = 0
    while (i != 1) {
       decision <- readInputs("Would you like to print out the Model's Confusion Matrix & Results? (Y | N): ")
@@ -181,15 +187,13 @@ createBaseResults <- function(trainTestDFsList, variableToPredict) {
    baseFP <- 0
    baseFN <- 0
 
-   baseSensitivity <- (baseTP / (baseTP + baseFN))
-   baseSpecificity <- (baseTN / (baseTN + baseFP))
-   baseAccuracy <- (baseTP + baseTN) / (baseTP + baseTN + baseFP + baseFN)
-   baseBalancedAccuracy <- ((baseSensitivity + baseSpecificity) / 2)
+   baseCM <- calcModelResults(baseTP, baseTN, 
+                              baseFP, baseFN)
 
-   baseResults <- list('bSen' = baseSensitivity,
-                       'bSpe' = baseSpecificity,
-                       'bAcc' = baseAccuracy,
-                       'bBalAcc' = baseBalancedAccuracy,
+   baseResults <- list('bSen' = baseCM[SENSITIVITY],
+                       'bSpe' = baseCM[SPECIFICITY],
+                       'bAcc' = baseCM[ACCURACY],
+                       'bBalAcc' = baseCM[BALANCEDACCURACY],
                        'bTP' = baseTP, 'bTN' = baseTN,
                        'bFP' = baseFP, 'bFN' = baseFN)
 
@@ -199,13 +203,14 @@ createBaseResults <- function(trainTestDFsList, variableToPredict) {
 #Decision Tree Model
 createDecisionTreeModel <- function(trainTestDFsList, 
                                     variableToPredict, 
-                                    printCMResults) {
+                                    printTF) {
    testingDF <- trainTestDFsList$testDF
    trainingDF <- trainTestDFsList$trainDF
 
    #Creates the formula using all other variables
    treeFormula <- paste(variableToPredict, '~ .')
-   #Grows the Tree, attempting to be model the desired variable to predict
+   
+   #Grows the Tree, attempting to model the desired variable column to predict
    treeFit <- rpart(formula = treeFormula,
                     data = trainingDF,
                     method = "class",
@@ -218,32 +223,60 @@ createDecisionTreeModel <- function(trainTestDFsList,
    #Extracts the actual class of each observation in 'testingDF'
    treeActual <- testingDF[, variableToPredict]
 
+   #Builds the results table
+   resultsTable <- table(treePred, treeActual)
+
+   #Determines how many unique variables there are within the chosen column
+   numUniqueValues <- nrow(resultsTable)
+   
    #Builds the confusion matrix 'treeCM', otherwise known as the contingency
    #matrix of predicted vs actual
-   treeCM <- table(treePred, treeActual)
-
-   #Extracts the True Positive (TP), True Negative (TN), False Positive (FP)
-   #& False Negative (FN) values from the confusion matrix 'treeCM'
-   treeTP <- treeCM[2,2]
-   treeTN <- treeCM[1,1]
-   treeFP <- treeCM[2,1]
-   treeFN <- treeCM[1,2]
-
-   #Calculates the tree model recall / sensitivity
-   #(TPR = TP / P = TP / (TP + FN)) of the model
-   treeSensitivity <- (treeTP / (treeTP + treeFN))
-
-   #Calculates the tree model specificity
-   #(TNR = TN / N = TN / (TN + FP)) of the model
-   treeSpecificity <- (treeTN / (treeTN + treeFP))
-
-   #Calculates the tree model accuracy of the model (A = (TP + TN) / S)
-   treeAccuracy <- (treeTP + treeTN) / (treeTP + treeTN + treeFP + treeFN)
-
-   #Calculates the tree model balanced accuracy of the model
-   #(BA = (((TP / P) + (TN / N)) / 2))
-   treeBalancedAccuracy <- ((treeSensitivity + treeSpecificity) / 2)
-
+   treeCM <- matrix(0, nrow = 2, ncol = 2)
+   
+   #If the number of unique variables is binary, then the results table and 
+   #confusion matrix are identical to one another
+   if (numUniqueValues == 2) {
+      treeCM[2,2] <- resultsTable[2,2]
+      treeCM[1,1] <- resultsTable[1,1]
+      treeCM[2,1] <- resultsTable[2,1]
+      treeCM[1,2] <- resultsTable[1,2]
+   }
+      
+   else {
+      for (i in 1:numUniqueValues) {
+         referencePointFound <- FALSE
+         iReferencePoint <- 0
+         jReferencePoint <- 0
+         print(treeCM[2,2])
+         for (j in 1:numUniqueValues) {
+            if (i == j) {
+               treeCM[2,2] <- treeCM[2,2] + resultsTable[i,j] #True Positives
+               referencePointFound <- TRUE
+               iTemp <- i
+               jTemp <- j
+            }
+            else if (referencePointFound == TRUE) {
+               print(sum(resultsTable[iTemp,]))
+               tns <- (sum(resultsTable) - 
+                       (sum(resultsTable[iTemp,]) - resultsTable[iTemp,jTemp]) - 
+                       (sum(resultsTable[,jTemp]) - resultsTable[iTemp,jTemp]))
+               fps <- sum(resultsTable[iTemp,]) - resultsTable[iTemp,jTemp]
+               fns <- sum(resultsTable[,jTemp]) - resultsTable[iTemp,jTemp]
+               
+               treeCM[1,1] <- treeCM[1,1] + tns #True Negatives
+               treeCM[2,1] <- treeCM[2,1] + fps #False Positives
+               treeCM[1,2] <- treeCM[1,2] + fns #False Negatives
+            }
+         }
+      }
+   }
+   
+   print(treeCM)
+   
+   #Calculates the Decision Tree Model results
+   treeResults <- calcModelResults(treeCM[2,2], treeCM[1,1], 
+                                   treeCM[2,1], treeCM[1,2])
+   
    #Plots & prints out the Decision Tree Model results
    #Plots the decision tree in a more aesthetically pleasing fashion
    rpart.plot(treeFit, type = 1,
@@ -253,24 +286,21 @@ createDecisionTreeModel <- function(trainTestDFsList,
 
    #Prints out the confusion matrix 'treeCM', using the predicted
    #before actual results, along with margins
-   if (printCMResults == TRUE) {
-      print("Confusion Matrix of the Decision Tree Model: ")
-      print(addmargins(treeCM))
-
-      print(paste("Sensitivity of the Decision Tree Model: ", treeSensitivity))
-      print(paste("Specificity of the Decision Tree Model: ", treeSpecificity))
-      print(paste("Accuracy of the Decision Tree Model: ", treeAccuracy))
-      print(paste("Balanced Accuracy of the Decision Tree Model: ",
-                  treeBalancedAccuracy))
+   if (printTF == TRUE) {
+      printModelResults('Decision Tree Model', treeCM, 
+                        treeResults[SENSITIVITY], 
+                        treeResults[SPECIFICITY], 
+                        treeResults[ACCURACY], 
+                        treeResults[BALANCEDACCURACY])
    }
 
    decisionTreeResults <- list('dtPred' = treePred,
-                               'dtSen' = treeSensitivity,
-                               'dtSpe' = treeSpecificity,
-                               'dtAcc' = treeAccuracy,
-                               'dtBalAcc' = treeBalancedAccuracy,
-                               'dtTP' = treeTP, 'dtTN' = treeTN,
-                               'dtFP' = treeFP, 'dtFN' = treeFN)
+                               'dtSen' = treeResults[SENSITIVITY],
+                               'dtSpe' = treeResults[SPECIFICITY],
+                               'dtAcc' = treeResults[ACCURACY],
+                               'dtBalAcc' = treeResults[BALANCEDACCURACY],
+                               'dtTP' = treeCM[2,2], 'dtTN' = treeCM[1,1],
+                               'dtFP' = treeCM[2,1], 'dtFN' = treeCM[1,2])
 
    return(decisionTreeResults)
 }
@@ -278,7 +308,7 @@ createDecisionTreeModel <- function(trainTestDFsList,
 #Logistic Regression Model
 createLogisticRegressionModel <- function(trainTestDFsList, 
                                           variableToPredict, 
-                                          printCMResults) {
+                                          printTF) {
    testingDF <- trainTestDFsList$testDF
    trainingDF <- trainTestDFsList$trainDF
 
@@ -300,40 +330,26 @@ createLogisticRegressionModel <- function(trainTestDFsList,
 
    testingDF <- testingDF[, !(names(testingDF) %in% c("logitRegPred",
                                                       "logitRegVariablePred"))]
-
-   logitRegTP <- logitRegCM[2,2]
-   logitRegTN <- logitRegCM[1,1]
-   logitRegFP <- logitRegCM[2,1]
-   logitRegFN <- logitRegCM[1,2]
-
-   logitRegSensitivity <- (logitRegTP / (logitRegTP + logitRegFN))
-   logitRegSpecificity <- (logitRegTN / (logitRegTN + logitRegFP))
-   logitRegAccuracy <- ((logitRegTP + logitRegTN) /
-                        (logitRegTP + logitRegTN + logitRegFP + logitRegFN))
-   logitRegBalancedAccuracy <- ((logitRegSensitivity + logitRegSpecificity) / 2)
+   
+   logitRegResults <- calcModelResults(logitRegCM[2,2], logitRegCM[1,1], 
+                                       logitRegCM[2,1], logitRegCM[1,2])
 
    #Prints out the Logistic Regression Model results
-   if (printCMResults == TRUE) {
-      print("Confusion Matrix of the Logistic Regression Model: ")
-      print(addmargins(logitRegCM))
-
-      print(paste("Sensitivity of the Logistic Regression Model: ",
-                  logitRegSensitivity))
-      print(paste("Specificity of the Logistic Regression Model: ",
-                  logitRegSpecificity))
-      print(paste("Accuracy of the Logistic Regression Model: ",
-                  logitRegAccuracy))
-      print(paste("Balanced Accuracy of the Logistic Regression Model: ",
-                  logitRegBalancedAccuracy))
+   if (printTF == TRUE) {
+      printModelResults('Logistic Regression Model', logitRegCM, 
+                        logitRegResults[SENSITIVITY], 
+                        logitRegResults[SPECIFICITY], 
+                        logitRegResults[ACCURACY], 
+                        logitRegResults[BALANCEDACCURACY])
    }
 
    logitRegResults <- list('lgPred' = logitRegPred,
-                           'lgSen' = logitRegSensitivity,
-                           'lgSpe' = logitRegSpecificity,
-                           'lgAcc' = logitRegAccuracy,
-                           'lgBalAcc' = logitRegBalancedAccuracy,
-                           'lgTP' = logitRegTP, 'lgTN' = logitRegTN,
-                           'lgFP' = logitRegFP, 'lgFN' = logitRegFN)
+                           'lgSen' = logitRegResults[SENSITIVITY],
+                           'lgSpe' = logitRegResults[SPECIFICITY],
+                           'lgAcc' = logitRegResults[ACCURACY],
+                           'lgBalAcc' = logitRegResults[BALANCEDACCURACY],
+                           'lgTP' = logitRegCM[2,2], 'lgTN' = logitRegCM[1,1],
+                           'lgFP' = logitRegCM[2,1], 'lgFN' = logitRegCM[1,2])
 
    return(logitRegResults)
 }
@@ -341,7 +357,7 @@ createLogisticRegressionModel <- function(trainTestDFsList,
 #K-Nearest Neighbors Model
 createKNearestNeighborsModel <- function(trainTestDFsList, 
                                          variableToPredict, 
-                                         printCMResults) {
+                                         printTF) {
    testingDF <- trainTestDFsList$testDF
    trainingDF <- trainTestDFsList$trainDF
 
@@ -360,43 +376,26 @@ createKNearestNeighborsModel <- function(trainTestDFsList,
    knnPred <- predict(knnFit, testingDF)
    knnActual <- testingDF[, variableToPredict]
    
-   #Explicitly selecting a specific column directly versus indirectly via a 
-   #variable results in very minor variations in final output predictive results
-   #knnActual <- testingDF$Churn
-   
    knnCM <- table(knnPred, knnActual)
+   
+   knnResults <- calcModelResults(knnCM[2,2], knnCM[1,1], 
+                                  knnCM[2,1], knnCM[1,2])
 
-   knnTP <- knnCM[2,2]
-   knnTN <- knnCM[1,1]
-   knnFP <- knnCM[2,1]
-   knnFN <- knnCM[1,2]
-
-   knnSensitivity <- (knnTP / (knnTP + knnFN))
-   knnSpecificity <- (knnTN / (knnTN + knnFP))
-   knnAccuracy <- (knnTP + knnTN) / (knnTP + knnTN + knnFP + knnFN)
-   knnBalancedAccuracy <- ((knnSensitivity + knnSpecificity) / 2)
-
-   #Prints out the K-Nearest Neighbor Model results
-   if (printCMResults == TRUE) {
-      print("Confusion Matrix of the K-Nearest Neighbor Model: ")
-      print(addmargins(knnCM))
-
-      print(paste("Sensitivity of the K-Nearest Neighbor Model: ",
-                  knnSensitivity))
-      print(paste("Specificity of the K-Nearest Neighbor Model: ",
-                  knnSpecificity))
-      print(paste("Accuracy of the K-Nearest Neighbor Model: ", knnAccuracy))
-      print(paste("Balanced Accuracy of the K-Nearest Neighbor Model: ",
-                  knnBalancedAccuracy))
+   if (printTF == TRUE) {
+      printModelResults('K-Nearest Neighbor Model', knnCM, 
+                        knnResults[SENSITIVITY], 
+                        knnResults[SPECIFICITY], 
+                        knnResults[ACCURACY], 
+                        knnResults[BALANCEDACCURACY])
    }
 
    knnResults <- list('knnPred' = knnPred,
-                      'knnSen' = knnSensitivity,
-                      'knnSpe' = knnSpecificity,
-                      'knnAcc' = knnAccuracy,
-                      'knnBalAcc' = knnBalancedAccuracy,
-                      'knnTP' = knnTP, 'knnTN' = knnTN,
-                      'knnFP' = knnFP, 'knnFN' = knnFN)
+                      'knnSen' = knnResults[SENSITIVITY],
+                      'knnSpe' = knnResults[SPECIFICITY],
+                      'knnAcc' = knnResults[ACCURACY],
+                      'knnBalAcc' = knnResults[BALANCEDACCURACY],
+                      'knnTP' = knnCM[2,2], 'knnTN' = knnCM[1,1],
+                      'knnFP' = knnCM[2,1], 'knnFN' = knnCM[1,2])
 
    return(knnResults)
 }
@@ -404,7 +403,7 @@ createKNearestNeighborsModel <- function(trainTestDFsList,
 #Naive Bayes Classifier Model
 createNaiveBayesClassifierModel <- function(trainTestDFsList, 
                                             variableToPredict, 
-                                            printCMResults) {
+                                            printTF) {
    testingDF <- trainTestDFsList$testDF
    trainingDF <- trainTestDFsList$trainDF
 
@@ -418,46 +417,32 @@ createNaiveBayesClassifierModel <- function(trainTestDFsList,
    nBayesActual <- testingDF[, variableToPredict]
    nBayesCM <- table(nBayesPredClass, nBayesActual)
 
-   nBayesTP <- nBayesCM[2,2]
-   nBayesTN <- nBayesCM[1,1]
-   nBayesFP <- nBayesCM[2,1]
-   nBayesFN <- nBayesCM[1,2]
-
-   nBayesSensitivity <- (nBayesTP / (nBayesTP + nBayesFN))
-   nBayesSpecificity <- (nBayesTN / (nBayesTN + nBayesFP))
-   nBayesAccuracy <- ((nBayesTP + nBayesTN) /
-                      (nBayesTP + nBayesTN + nBayesFP + nBayesFN))
-   nBayesBalancedAccuracy <- ((nBayesSensitivity + nBayesSpecificity) / 2)
+   nBayesResults <- calcModelResults(nBayesCM[2,2], nBayesCM[1,1], 
+                                     nBayesCM[2,1], nBayesCM[1,2])
 
    #Prints out the Naive Bayes Classifier Model results
-   if (printCMResults == TRUE) {
-      print("Confusion Matrix of the Naive Bayes Classifier Model: ")
-      print(addmargins(nBayesCM))
-
-      print(paste("Sensitivity of the Naive Bayes Classifier Model: ",
-                  nBayesSensitivity))
-      print(paste("Specificity of the Naive Bayes Classifier Model: ",
-                  nBayesSpecificity))
-      print(paste("Accuracy of the Naive Bayes Classifier Model: ",
-                  nBayesAccuracy))
-      print(paste("Balanced Accuracy of the Naive Bayes Classifier Model: ",
-                  nBayesBalancedAccuracy))
+   if (printTF == TRUE) {
+      printModelResults('Naive Bayes Classifier Model', nBayesCM, 
+                        nBayesResults[SENSITIVITY], 
+                        nBayesResults[SPECIFICITY], 
+                        nBayesResults[ACCURACY], 
+                        nBayesResults[BALANCEDACCURACY])
    }
 
    nBayesResults <- list('nbPred' = nBayesPredClass,
-                         'nbSen' = nBayesSensitivity,
-                         'nbSpe' = nBayesSpecificity,
-                         'nbAcc' = nBayesAccuracy,
-                         'nbBalAcc' = nBayesBalancedAccuracy,
-                         'nbTP' = nBayesTP, 'nbTN' = nBayesTN,
-                         'nbFP' = nBayesFP, 'nbFN' = nBayesFN)
+                         'nbSen' = nBayesResults[SENSITIVITY],
+                         'nbSpe' = nBayesResults[SPECIFICITY],
+                         'nbAcc' = nBayesResults[ACCURACY],
+                         'nbBalAcc' = nBayesResults[BALANCEDACCURACY],
+                         'nbTP' = nBayesCM[2,2], 'nbTN' = nBayesCM[1,1],
+                         'nbFP' = nBayesCM[2,1], 'nbFN' = nBayesCM[1,2])
 
    return(nBayesResults)
 }
 
 #Ensemble Methods Model
 createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
-                                       trainTestDFsList, printCMResults) {
+                                       trainTestDFsList, printTF) {
 
    testingDF <- trainTestDFsList$testDF
 
@@ -574,16 +559,15 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
                              "K-Nearest Neighbors",
                              "Naive Bayes Classifier",
                              "Ensemble",
-                             "Actual Churn Results")
+                             "Known Actual Results")
 
    eResultsComplete <- rbind(eResultsOverall, eResultsCM)
    eResultsComplete <- as.data.frame.matrix(eResultsComplete)
 
-   if (printCMResults == TRUE) {
-      #Prints out the Ensemble Method results
-      print("Model Results Comparison Tables: ")
-      #print(eResultsCM)
-      #print(eResultsOverall)
+   #Prints out the Ensemble Method results
+   if (printTF == TRUE) {
+      print('Model Results Comparison Table')
+      cat('\n')
       print(eResultsComplete)
    }
 
@@ -599,6 +583,32 @@ compareDFs <- function(testDF, trueDF) {
    equal <- isTRUE(all.equal(testDF, trueDF, check.attributes = FALSE))
    print(paste0("The dataframes are equal: ", equal))
    return(equal)
+}
+
+#Calculates the model's sensitivity, specificity, accuracy and balanced accuracy
+calcModelResults <- function(tP, tN, fP, fN) {
+   sensitivity <- (tP / (tP + fN))
+   specificity <- (tN / (tN + fP))
+   accuracy <- (tP + tN) / (tP + tN + fP + fN)
+   balancedAccuracy <- ((sensitivity + specificity) / 2)
+   
+   results <- c(sensitivity, specificity, accuracy, balancedAccuracy)
+   return(results)
+}
+
+#Prints out the results of the appropriately selected model
+printModelResults <- function(modelName, confusionMatrix, sensitivity, 
+                              specificity, accuracy, balancedAccuracy) {
+   print(modelName)
+   print('Confusion Matrix: ')
+   cat('\n')
+   print(addmargins(confusionMatrix))
+   cat('\n')
+   print(paste('Sensitivity: ', sensitivity))
+   print(paste('Specificity: ', specificity))
+   print(paste('Accuracy: ', accuracy))
+   print(paste('Balanced Accuracy: ', balancedAccuracy))
+   cat('\n')
 }
 
 #Verifies for acceptable arguments passed in by the user to prevent errors
@@ -724,7 +734,7 @@ main <- function() {
 
    printResults <- TRUE
    if (autoTest == FALSE) {
-      printResults <- printCMResultsQuestionaire()
+      printResults <- printTFQuestionaire()
    }
 
    bR <- createBaseResults(trainTestDFsList, variableToPredict)
