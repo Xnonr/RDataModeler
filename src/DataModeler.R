@@ -553,7 +553,7 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
                                   "K-Nearest Neighbors",
                                   "Naive Bayes Classifier",
                                   "Ensemble",
-                                  "Actual Churn Results")
+                                  "Actual Results")
 
    #Row binds all TP, TN, FP & FN counts into one combined Confusion Matrix
    eResultsTP <- c(dtR$dtTP, lgR$lgTP, knnR$knnTP, nbR$nbTP, ensembleTP, bR$bTP)
@@ -645,7 +645,7 @@ calcModelCM <- function(resultsTable, numUniqueValues) {
 }
 
 calcAvgModelCM <- function(cmList, uniqueValues, numUniqueValues) {
-   avgResults <- replicate(3, 0)
+   avgResults <- replicate(4, 0)
    avgCM <- matrix(0, nrow = 2, ncol = 2)
    
    for (cm in cmList) {
