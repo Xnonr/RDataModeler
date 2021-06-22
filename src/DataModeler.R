@@ -32,10 +32,18 @@ library(rpart.plot)
 #setwd("~/Documents/github/RDataModeler/src")
 
 #CONSTANTS
+TN <- 1
+FN <- 2
+FP <- 3
+TP <- 4
+
 SENSITIVITY <- 1
 SPECIFICITY <- 2
 ACCURACY <- 3
 BALANCEDACCURACY <- 4
+
+RESULTS <- 1
+CONFUSIONMATRIX <- 2
 
 #Loads the base data file into a data frame
 createBaseDF <- function(baseCSVFile) {
@@ -177,25 +185,30 @@ printTFQuestionaire <- function() {
 #for easy model comparison
 createBaseResults <- function(trainTestDFsList, variableToPredict) {
    testingDF <- trainTestDFsList$testDF
-
+   
+   baseActual <- testingDF[, variableToPredict]
+   baseResultsTable <- table(baseActual, baseActual)
+   
+   numUniqueValues <- nrow(baseResultsTable)
    uniqueValues <- unique(testingDF[, variableToPredict])
-   uniqueValue1 <- as.character(uniqueValues[1])
-   uniqueValue2 <- as.character(uniqueValues[2])
-
-   baseTP <- sum(str_count(testingDF[, variableToPredict], uniqueValue1))
-   baseTN <- sum(str_count(testingDF[, variableToPredict], uniqueValue2))
-   baseFP <- 0
-   baseFN <- 0
-
-   baseCM <- calcModelResults(baseTP, baseTN, 
-                              baseFP, baseFN)
-
-   baseResults <- list('bSen' = baseCM[SENSITIVITY],
-                       'bSpe' = baseCM[SPECIFICITY],
-                       'bAcc' = baseCM[ACCURACY],
-                       'bBalAcc' = baseCM[BALANCEDACCURACY],
-                       'bTP' = baseTP, 'bTN' = baseTN,
-                       'bFP' = baseFP, 'bFN' = baseFN)
+   
+   baseCMList <- calcModelCM(baseResultsTable, numUniqueValues)
+   
+   avgBaseOutput <- calcAvgModelCM(baseCMList, 
+                                   uniqueValues, 
+                                   numUniqueValues)
+   
+   avgBaseResults <- avgBaseOutput[[RESULTS]]
+   avgBaseCM <- avgBaseOutput[[CONFUSIONMATRIX]]
+   
+   baseResults <- list('bSen' = avgBaseResults[SENSITIVITY],
+                       'bSpe' = avgBaseResults[SPECIFICITY],
+                       'bAcc' = avgBaseResults[ACCURACY],
+                       'bBalAcc' = avgBaseResults[BALANCEDACCURACY],
+                       'bTP' = avgBaseCM[2,2], 
+                       'bTN' = avgBaseCM[1,1],
+                       'bFP' = avgBaseCM[2,1], 
+                       'bFN' = avgBaseCM[1,2])
 
    return(baseResults)
 }
@@ -217,91 +230,53 @@ createDecisionTreeModel <- function(trainTestDFsList,
                     control = rpart.control(xval = 10, minsplit = 50),
                     parms = list(split = "gini"))
 
-   #Creates the confusion matrix called 'treeCM'
-   #Extracts the vector of predicted class for each observation in 'testingDF'
-   treePred <- predict(treeFit, testingDF, type = "class")
-   #Extracts the actual class of each observation in 'testingDF'
-   treeActual <- testingDF[, variableToPredict]
-
-   #Builds the results table
-   resultsTable <- table(treePred, treeActual)
-
-   #Determines how many unique variables there are within the chosen column
-   numUniqueValues <- nrow(resultsTable)
-   
-   #Builds the confusion matrix 'treeCM', otherwise known as the contingency
-   #matrix of predicted vs actual
-   treeCM <- matrix(0, nrow = 2, ncol = 2)
-   
-   #If the number of unique variables is binary, then the results table and 
-   #confusion matrix are identical to one another
-   if (numUniqueValues == 2) {
-      treeCM[2,2] <- resultsTable[2,2]
-      treeCM[1,1] <- resultsTable[1,1]
-      treeCM[2,1] <- resultsTable[2,1]
-      treeCM[1,2] <- resultsTable[1,2]
-   }
-      
-   else {
-      for (i in 1:numUniqueValues) {
-         referencePointFound <- FALSE
-         iReferencePoint <- 0
-         jReferencePoint <- 0
-         print(treeCM[2,2])
-         for (j in 1:numUniqueValues) {
-            if (i == j) {
-               treeCM[2,2] <- treeCM[2,2] + resultsTable[i,j] #True Positives
-               referencePointFound <- TRUE
-               iTemp <- i
-               jTemp <- j
-            }
-            else if (referencePointFound == TRUE) {
-               print(sum(resultsTable[iTemp,]))
-               tns <- (sum(resultsTable) - 
-                       (sum(resultsTable[iTemp,]) - resultsTable[iTemp,jTemp]) - 
-                       (sum(resultsTable[,jTemp]) - resultsTable[iTemp,jTemp]))
-               fps <- sum(resultsTable[iTemp,]) - resultsTable[iTemp,jTemp]
-               fns <- sum(resultsTable[,jTemp]) - resultsTable[iTemp,jTemp]
-               
-               treeCM[1,1] <- treeCM[1,1] + tns #True Negatives
-               treeCM[2,1] <- treeCM[2,1] + fps #False Positives
-               treeCM[1,2] <- treeCM[1,2] + fns #False Negatives
-            }
-         }
-      }
-   }
-   
-   print(treeCM)
-   
-   #Calculates the Decision Tree Model results
-   treeResults <- calcModelResults(treeCM[2,2], treeCM[1,1], 
-                                   treeCM[2,1], treeCM[1,2])
-   
    #Plots & prints out the Decision Tree Model results
    #Plots the decision tree in a more aesthetically pleasing fashion
    rpart.plot(treeFit, type = 1,
               extra = 1,
               main = paste('Classification Tree Prediction for: ', 
                            variableToPredict))
+   
+   #Extracts the vector of predicted class for each observation in 'testingDF'
+   treePred <- predict(treeFit, testingDF, type = "class")
+   #Extracts the actual class of each observation in 'testingDF'
+   treeActual <- testingDF[, variableToPredict]
 
-   #Prints out the confusion matrix 'treeCM', using the predicted
-   #before actual results, along with margins
+   #Builds the results table
+   treeResultsTable <- table(treePred, treeActual)
+
+   #Determines how many and what are the unique variables in the chosen column
+   numUniqueValues <- nrow(treeResultsTable)
+   uniqueValues <- unique(testingDF[, variableToPredict])
+   
+   treeCMList <- calcModelCM(treeResultsTable, numUniqueValues)
+      
+   avgTreeOutput <- calcAvgModelCM(treeCMList, 
+                                   uniqueValues, 
+                                   numUniqueValues)
+   
+   avgTreeResults <- avgTreeOutput[[RESULTS]]
+   avgTreeCM <- avgTreeOutput[[CONFUSIONMATRIX]]
+   
    if (printTF == TRUE) {
-      printModelResults('Decision Tree Model', treeCM, 
-                        treeResults[SENSITIVITY], 
-                        treeResults[SPECIFICITY], 
-                        treeResults[ACCURACY], 
-                        treeResults[BALANCEDACCURACY])
+      printModelResults('Decision Tree Model Average', 
+                        variableToPredict, avgTreeCM, 
+                        avgTreeResults[SENSITIVITY], 
+                        avgTreeResults[SPECIFICITY], 
+                        avgTreeResults[ACCURACY], 
+                        avgTreeResults[BALANCEDACCURACY])
    }
-
+   
    decisionTreeResults <- list('dtPred' = treePred,
-                               'dtSen' = treeResults[SENSITIVITY],
-                               'dtSpe' = treeResults[SPECIFICITY],
-                               'dtAcc' = treeResults[ACCURACY],
-                               'dtBalAcc' = treeResults[BALANCEDACCURACY],
-                               'dtTP' = treeCM[2,2], 'dtTN' = treeCM[1,1],
-                               'dtFP' = treeCM[2,1], 'dtFN' = treeCM[1,2])
-
+                               'dtSen' = avgTreeResults[SENSITIVITY],
+                               'dtSpe' = avgTreeResults[SPECIFICITY],
+                               'dtAcc' = avgTreeResults[ACCURACY],
+                               'dtBalAcc' = avgTreeResults[BALANCEDACCURACY],
+                               'dtTP' = avgTreeCM[2,2], 
+                               'dtTN' = avgTreeCM[1,1],
+                               'dtFP' = avgTreeCM[2,1], 
+                               'dtFN' = avgTreeCM[1,2])
+   
    return(decisionTreeResults)
 }
 
@@ -326,31 +301,44 @@ createLogisticRegressionModel <- function(trainTestDFsList,
 
    logitRegPred <- testingDF$logitRegVariablePred
    logitRegActual <- testingDF[, variableToPredict]
-   logitRegCM <- table(logitRegPred, logitRegActual)
+   
+   logitRegResultsTable <- table(logitRegPred, logitRegActual)
 
    testingDF <- testingDF[, !(names(testingDF) %in% c("logitRegPred",
                                                       "logitRegVariablePred"))]
    
-   logitRegResults <- calcModelResults(logitRegCM[2,2], logitRegCM[1,1], 
-                                       logitRegCM[2,1], logitRegCM[1,2])
+   numUniqueValues <- nrow(logitRegResultsTable)
+   uniqueValues <- unique(testingDF[, variableToPredict])
+   
+   logitRegCMList <- calcModelCM(logitRegResultsTable, numUniqueValues)
+   
+   avgLogitRegOutput <- calcAvgModelCM(logitRegCMList, 
+                                       uniqueValues, 
+                                       numUniqueValues)
+   
+   avgLogitRegResults <- avgLogitRegOutput[[RESULTS]]
+   avgLogitRegCM <- avgLogitRegOutput[[CONFUSIONMATRIX]]
 
    #Prints out the Logistic Regression Model results
    if (printTF == TRUE) {
-      printModelResults('Logistic Regression Model', logitRegCM, 
-                        logitRegResults[SENSITIVITY], 
-                        logitRegResults[SPECIFICITY], 
-                        logitRegResults[ACCURACY], 
-                        logitRegResults[BALANCEDACCURACY])
+      printModelResults('Logistic Regression Model Average', 
+                        variableToPredict, avgLogitRegCM, 
+                        avgLogitRegResults[SENSITIVITY], 
+                        avgLogitRegResults[SPECIFICITY], 
+                        avgLogitRegResults[ACCURACY], 
+                        avgLogitRegResults[BALANCEDACCURACY])
    }
 
    logitRegResults <- list('lgPred' = logitRegPred,
-                           'lgSen' = logitRegResults[SENSITIVITY],
-                           'lgSpe' = logitRegResults[SPECIFICITY],
-                           'lgAcc' = logitRegResults[ACCURACY],
-                           'lgBalAcc' = logitRegResults[BALANCEDACCURACY],
-                           'lgTP' = logitRegCM[2,2], 'lgTN' = logitRegCM[1,1],
-                           'lgFP' = logitRegCM[2,1], 'lgFN' = logitRegCM[1,2])
-
+                           'lgSen' = avgLogitRegResults[SENSITIVITY],
+                           'lgSpe' = avgLogitRegResults[SPECIFICITY],
+                           'lgAcc' = avgLogitRegResults[ACCURACY],
+                           'lgBalAcc' = avgLogitRegResults[BALANCEDACCURACY],
+                           'lgTP' = avgLogitRegCM[2,2], 
+                           'lgTN' = avgLogitRegCM[1,1],
+                           'lgFP' = avgLogitRegCM[2,1], 
+                           'lgFN' = avgLogitRegCM[1,2])
+   
    return(logitRegResults)
 }
 
@@ -376,26 +364,38 @@ createKNearestNeighborsModel <- function(trainTestDFsList,
    knnPred <- predict(knnFit, testingDF)
    knnActual <- testingDF[, variableToPredict]
    
-   knnCM <- table(knnPred, knnActual)
+   knnResultsTable <- table(knnPred, knnActual)
    
-   knnResults <- calcModelResults(knnCM[2,2], knnCM[1,1], 
-                                  knnCM[2,1], knnCM[1,2])
+   numUniqueValues <- nrow(knnResultsTable)
+   uniqueValues <- unique(testingDF[, variableToPredict])
+   
+   knnCMList <- calcModelCM(knnResultsTable, numUniqueValues)
+   
+   avgKNNOutput <- calcAvgModelCM(knnCMList, 
+                                  uniqueValues, 
+                                  numUniqueValues)
+   
+   avgKNNResults <- avgKNNOutput[[RESULTS]]
+   avgKNNCM <- avgKNNOutput[[CONFUSIONMATRIX]]
 
    if (printTF == TRUE) {
-      printModelResults('K-Nearest Neighbor Model', knnCM, 
-                        knnResults[SENSITIVITY], 
-                        knnResults[SPECIFICITY], 
-                        knnResults[ACCURACY], 
-                        knnResults[BALANCEDACCURACY])
+      printModelResults('K-Nearest Neighbor Model Average', 
+                        variableToPredict, avgKNNCM, 
+                        avgKNNResults[SENSITIVITY], 
+                        avgKNNResults[SPECIFICITY], 
+                        avgKNNResults[ACCURACY], 
+                        avgKNNResults[BALANCEDACCURACY])
    }
 
    knnResults <- list('knnPred' = knnPred,
-                      'knnSen' = knnResults[SENSITIVITY],
-                      'knnSpe' = knnResults[SPECIFICITY],
-                      'knnAcc' = knnResults[ACCURACY],
-                      'knnBalAcc' = knnResults[BALANCEDACCURACY],
-                      'knnTP' = knnCM[2,2], 'knnTN' = knnCM[1,1],
-                      'knnFP' = knnCM[2,1], 'knnFN' = knnCM[1,2])
+                      'knnSen' = avgKNNResults[SENSITIVITY],
+                      'knnSpe' = avgKNNResults[SPECIFICITY],
+                      'knnAcc' = avgKNNResults[ACCURACY],
+                      'knnBalAcc' = avgKNNResults[BALANCEDACCURACY],
+                      'knnTP' = avgKNNCM[2,2], 
+                      'knnTN' = avgKNNCM[1,1],
+                      'knnFP' = avgKNNCM[2,1], 
+                      'knnFN' = avgKNNCM[1,2])
 
    return(knnResults)
 }
@@ -415,27 +415,40 @@ createNaiveBayesClassifierModel <- function(trainTestDFsList,
    nBayesPred <- predict(nBayesFit, testingDF, type = "raw")
    nBayesPredClass <- predict(nBayesFit, testingDF, type = "class")
    nBayesActual <- testingDF[, variableToPredict]
-   nBayesCM <- table(nBayesPredClass, nBayesActual)
-
-   nBayesResults <- calcModelResults(nBayesCM[2,2], nBayesCM[1,1], 
-                                     nBayesCM[2,1], nBayesCM[1,2])
+   
+   nBayesResultsTable <- table(nBayesPredClass, nBayesActual)
+   
+   numUniqueValues <- nrow(nBayesResultsTable)
+   uniqueValues <- unique(testingDF[, variableToPredict])
+   
+   nBayesCMList <- calcModelCM(nBayesResultsTable, numUniqueValues)
+   
+   avgNBayesOutput <- calcAvgModelCM(nBayesCMList, 
+                                     uniqueValues, 
+                                     numUniqueValues)
+   
+   avgNBayesResults <- avgNBayesOutput[[RESULTS]]
+   avgNBayesCM <- avgNBayesOutput[[CONFUSIONMATRIX]]
 
    #Prints out the Naive Bayes Classifier Model results
    if (printTF == TRUE) {
-      printModelResults('Naive Bayes Classifier Model', nBayesCM, 
-                        nBayesResults[SENSITIVITY], 
-                        nBayesResults[SPECIFICITY], 
-                        nBayesResults[ACCURACY], 
-                        nBayesResults[BALANCEDACCURACY])
+      printModelResults('Naive Bayes Classifier Model Average', 
+                        variableToPredict, avgNBayesCM, 
+                        avgNBayesResults[SENSITIVITY], 
+                        avgNBayesResults[SPECIFICITY], 
+                        avgNBayesResults[ACCURACY], 
+                        avgNBayesResults[BALANCEDACCURACY])
    }
 
    nBayesResults <- list('nbPred' = nBayesPredClass,
-                         'nbSen' = nBayesResults[SENSITIVITY],
-                         'nbSpe' = nBayesResults[SPECIFICITY],
-                         'nbAcc' = nBayesResults[ACCURACY],
-                         'nbBalAcc' = nBayesResults[BALANCEDACCURACY],
-                         'nbTP' = nBayesCM[2,2], 'nbTN' = nBayesCM[1,1],
-                         'nbFP' = nBayesCM[2,1], 'nbFN' = nBayesCM[1,2])
+                         'nbSen' = avgNBayesResults[SENSITIVITY],
+                         'nbSpe' = avgNBayesResults[SPECIFICITY],
+                         'nbAcc' = avgNBayesResults[ACCURACY],
+                         'nbBalAcc' = avgNBayesResults[BALANCEDACCURACY],
+                         'nbTP' = avgNBayesCM[2,2], 
+                         'nbTN' = avgNBayesCM[1,1],
+                         'nbFP' = avgNBayesCM[2,1], 
+                         'nbFN' = avgNBayesCM[1,2])
 
    return(nBayesResults)
 }
@@ -585,6 +598,77 @@ compareDFs <- function(testDF, trueDF) {
    return(equal)
 }
 
+calcModelCM <- function(resultsTable, numUniqueValues) {
+   #Builds the confusion matrices, otherwise known as contingency matrices of 
+   #predicted vs actual results, and an empty vector in which to place them
+   cm1 <- matrix(0, nrow = 2, ncol = 2)
+   cm2 <- cm1
+   cmList <- c()
+   
+   #If the number of unique variables is binary, then the results table and 
+   #confusion matrix are identical to one another
+   if (numUniqueValues == 2) {
+      cm2[2,2] <- resultsTable[2,2]
+      cm2[1,1] <- resultsTable[1,1]
+      cm2[2,1] <- resultsTable[2,1]
+      cm2[1,2] <- resultsTable[1,2]
+      
+      cmList[[1]] <- cm2
+      
+      cm2 <- cm1
+   }
+   else {
+      for (i in 1:numUniqueValues) {
+         for (j in 1:numUniqueValues) {
+            if (i == j) {
+               tps <- resultsTable[i,j]
+               tns <- (sum(resultsTable) - 
+                          (sum(resultsTable[i,]) - resultsTable[i,j]) - 
+                          (sum(resultsTable[,j]) - resultsTable[i,j]) - 
+                          resultsTable[i,j])
+               fps <- sum(resultsTable[i,]) - resultsTable[i,j]
+               fns <- sum(resultsTable[,j]) - resultsTable[i,j]
+               
+               cm2[2,2] <- cm2[2,2] + tps #True Positives
+               cm2[1,1] <- cm2[1,1] + tns #True Negatives
+               cm2[2,1] <- cm2[2,1] + fps #False Positives
+               cm2[1,2] <- cm2[1,2] + fns #False Negatives
+               
+               cmList[[i]] <- cm2
+               
+               cm2 <- cm1
+            }
+         }
+      }
+   }
+   return(cmList)
+}
+
+calcAvgModelCM <- function(cmList, uniqueValues, numUniqueValues) {
+   avgResults <- replicate(3, 0)
+   avgCM <- matrix(0, nrow = 2, ncol = 2)
+   
+   for (cm in cmList) {
+      #Calculates the model results for each confusion matrix in the given list
+      modelResults <- calcModelResults(cm[2,2], cm[1,1], 
+                                       cm[2,1], cm[1,2])
+      
+      avgResults <- avgResults + modelResults
+      avgCM <- avgCM + cm
+   }
+   
+   if (numUniqueValues > 2) {
+      avgResults <- avgResults / numUniqueValues
+      avgCM <- avgCM / numUniqueValues
+   }
+   
+   results <- c()
+   results[[1]] <- avgResults
+   results[[2]] <- avgCM
+
+   return(results)
+}
+
 #Calculates the model's sensitivity, specificity, accuracy and balanced accuracy
 calcModelResults <- function(tP, tN, fP, fN) {
    sensitivity <- (tP / (tP + fN))
@@ -596,10 +680,11 @@ calcModelResults <- function(tP, tN, fP, fN) {
    return(results)
 }
 
-#Prints out the results of the appropriately selected model
-printModelResults <- function(modelName, confusionMatrix, sensitivity, 
+#Prints out the results of the appropriately selected model along with margins
+printModelResults <- function(modelName, variable, confusionMatrix, sensitivity, 
                               specificity, accuracy, balancedAccuracy) {
    print(modelName)
+   print(paste('Modeled Variable: ', variable))
    print('Confusion Matrix: ')
    cat('\n')
    print(addmargins(confusionMatrix))
@@ -762,6 +847,7 @@ main <- function() {
 main()
 
 #For manual debugging & testing purposes
+
 # baseDF <- createBaseDF('Telco_Customer_Churn.csv')
 # predefinedToRemoveColumnsList <- c('customerID', 'TotalCharges', 'PaperlessBilling', 'PaymentMethod')
 # predefinedVariableToPredict <- 'Churn'
