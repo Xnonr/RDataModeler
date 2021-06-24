@@ -192,7 +192,9 @@ createBaseResults <- function(trainTestDFsList, variableToPredict) {
    numUniqueValues <- nrow(baseResultsTable)
    uniqueValues <- unique(testingDF[, variableToPredict])
    
-   baseCMList <- calcModelCM(baseResultsTable, numUniqueValues)
+   baseCMList <- calcModelCM(baseResultsTable, 
+                             numUniqueValues, 
+                             'base')
    
    avgBaseOutput <- calcAvgModelCM(baseCMList, 
                                    uniqueValues, 
@@ -249,7 +251,9 @@ createDecisionTreeModel <- function(trainTestDFsList,
    numUniqueValues <- nrow(treeResultsTable)
    uniqueValues <- unique(testingDF[, variableToPredict])
    
-   treeCMList <- calcModelCM(treeResultsTable, numUniqueValues)
+   treeCMList <- calcModelCM(treeResultsTable, 
+                             numUniqueValues, 
+                             'decisionTree')
       
    avgTreeOutput <- calcAvgModelCM(treeCMList, 
                                    uniqueValues, 
@@ -280,7 +284,7 @@ createDecisionTreeModel <- function(trainTestDFsList,
    return(decisionTreeResults)
 }
 
-#Logistic Regression Model
+#Logistic Regression Model (Only for use on binomial outcomes)
 createLogisticRegressionModel <- function(trainTestDFsList, 
                                           variableToPredict, 
                                           printTF) {
@@ -310,7 +314,9 @@ createLogisticRegressionModel <- function(trainTestDFsList,
    numUniqueValues <- nrow(logitRegResultsTable)
    uniqueValues <- unique(testingDF[, variableToPredict])
    
-   logitRegCMList <- calcModelCM(logitRegResultsTable, numUniqueValues)
+   logitRegCMList <- calcModelCM(logitRegResultsTable, 
+                                 numUniqueValues, 
+                                 'logisticRegression')
    
    avgLogitRegOutput <- calcAvgModelCM(logitRegCMList, 
                                        uniqueValues, 
@@ -369,7 +375,9 @@ createKNearestNeighborsModel <- function(trainTestDFsList,
    numUniqueValues <- nrow(knnResultsTable)
    uniqueValues <- unique(testingDF[, variableToPredict])
    
-   knnCMList <- calcModelCM(knnResultsTable, numUniqueValues)
+   knnCMList <- calcModelCM(knnResultsTable, 
+                            numUniqueValues, 
+                            'kNearestNeighbors')
    
    avgKNNOutput <- calcAvgModelCM(knnCMList, 
                                   uniqueValues, 
@@ -421,7 +429,9 @@ createNaiveBayesClassifierModel <- function(trainTestDFsList,
    numUniqueValues <- nrow(nBayesResultsTable)
    uniqueValues <- unique(testingDF[, variableToPredict])
    
-   nBayesCMList <- calcModelCM(nBayesResultsTable, numUniqueValues)
+   nBayesCMList <- calcModelCM(nBayesResultsTable, 
+                               numUniqueValues, 
+                               'naiveBayes')
    
    avgNBayesOutput <- calcAvgModelCM(nBayesCMList, 
                                      uniqueValues, 
@@ -455,75 +465,80 @@ createNaiveBayesClassifierModel <- function(trainTestDFsList,
 
 #Ensemble Methods Model
 createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
-                                       trainTestDFsList, printTF) {
+                                       trainTestDFsList, 
+                                       variableToPredict, 
+                                       printTF) {
 
    testingDF <- trainTestDFsList$testDF
 
-   ensembleDF <- subset(testingDF, select = c("Churn"))
+   ensembleDF <- subset(testingDF, select = c(variableToPredict))
 
-   #Assembles all the predicted Churn results from every model previously ran
-   ensembleDF$treeChurnPred <- dtR$dtPred
-   ensembleDF$logitChurnRegPred <- lgR$lgPred
-   ensembleDF$knnChurnPred <- knnR$knnPred
-   ensembleDF$nBayesChurnPred <- nbR$nbPred
-
+   uniqueValues <- unique(testingDF[, variableToPredict])
+   numUniqueValues <- length(uniqueValues)
+   
+   print(uniqueValues[1])
+   print(uniqueValues[2])
+   
+   #Creates the voting matrix
+   votesMatrix <- data.frame(matrix(0, nrow = numUniqueValues, ncol = 4))
+   rownames(votesMatrix) <- uniqueValues
+   colnames(votesMatrix) <- c("treePred",
+                             "logisticRegPred",
+                             "knnPred",
+                             "nBayesPred")
+   
+   #Assembles all the predicted results from every model previously ran
+   ensembleDF$treePred <- dtR$dtPred
+   ensembleDF$logitRegPred <- lgR$lgPred
+   ensembleDF$knnPred <- knnR$knnPred
+   ensembleDF$nBayesPred <- nbR$nbPred
+   ensembleDF$ensemblePred <- 'NA'
+   
+   modelBalAccs <- c(dtR$dtBalAcc, lgR$lgBalAcc, knnR$knnBalAcc, nbR$nbBalAcc)
+   minBalAccModel <- which.min(modelBalAccs)
+   
    #Factors become 'NAN' values when setting them to binary values; must be removed
    ensembleDF <- remove.factors(ensembleDF)
+   
+   if(ensembleDF$logitRegPred == 0) {
+      ensembleDF$logitRegPred <- uniqueValues[1]
+   } 
+   else {
+      ensembleDF$logitRegPred <- uniqueValues[2]
+   }
+   #ensembleDF$logitRegPred[ensembleDF$logitRegPred > 0] <- uniqueValues[2]
+   #ensembleDF$logitRegPred[ensembleDF$logitRegPred == 0] <- uniqueValues[1]
 
-   ensembleDF$Churn[ensembleDF$Churn == "No"] <- 0
-   ensembleDF$Churn[ensembleDF$Churn == "Yes"] <- 1
+   for (i in 1:nrow(ensembleDF)) {
+      for (j in 1:4) {
+         for (k in 1:nrow(votesMatrix)) {
+            if (ensembleDF[i,j+1] == uniqueValues[k]) {
+               votesMatrix[k,j] <- 1 
+            }
+         }
+      }
+      #Removes the least accurate model's vote to avoid ties or deadlocks
+      votesMatrix[,minBalAccModel] <- 0
+      
+      #Determines the winning vote
+      votesMatrix$WeightedTotal <- rowSums(votesMatrix[,c(1:4)])
+      maxVoteValueIndex <- which.max(votesMatrix$WeightedTotal)
+      maxVoteValueName <- rownames(votesMatrix[maxVoteValueIndex,])
+      
+      #For Debugging Purposes
+      print(votesMatrix)
+      print(maxVoteValueName)
+      
+      ensembleDF[i,6] <- maxVoteValueName
+      
+      #Reset the votes matrix for the next row
+      votesMatrix[votesMatrix > 0] <- 0
+   }
 
-   ensembleDF$treeChurnPred[ensembleDF$treeChurnPred == "No"] <- 0
-   ensembleDF$treeChurnPred[ensembleDF$treeChurnPred == "Yes"] <- 1
-
-   ensembleDF$knnChurnPred[ensembleDF$knnChurnPred == "No"] <- 0
-   ensembleDF$knnChurnPred[ensembleDF$knnChurnPred == "Yes"] <- 1
-
-   ensembleDF$nBayesChurnPred[ensembleDF$nBayesChurnPred == "No"] <- 0
-   ensembleDF$nBayesChurnPred[ensembleDF$nBayesChurnPred == "Yes"] <- 1
-
-   #Ensures no other problems by transforming all columns to numeric data type
-   ensembleDF$Churn <- as.numeric(ensembleDF$Churn)
-   ensembleDF$treeChurnPred <- as.numeric(ensembleDF$treeChurnPred)
-   ensembleDF$knnChurnPred <- as.numeric(ensembleDF$knnChurnPred)
-   ensembleDF$nBayesChurnPred <- as.numeric(ensembleDF$nBayesChurnPred)
-
-   #Calculates 2 Vote Combinations' Summed Accuracy
-   treeLogReg <- dtR$dtBalAcc + lgR$lgBalAcc #1100
-   treeKnn <- dtR$dtBalAcc  + knnR$knnBalAcc #1010
-   treeNBayes <- dtR$dtBalAcc  + nbR$nbBalAcc #1001
-   logRegKnn <- lgR$lgBalAcc + knnR$knnBalAcc #0110
-   logRegNBayes <- lgR$lgBalAcc + nbR$nbBalAcc #0101
-   knnNBayes <- knnR$knnBalAcc + nbR$nbBalAcc #0011
-
-   #Calculates which 2 vote combinations trump their opposites
-   treeLogRegVSknnNBayes <- treeLogReg - knnNBayes #1100 vs 0011 #1100 Wins
-   treeKnnVSlogRegNBayes <- treeKnn - logRegNBayes #1010 vs 0101 #1010 Wins
-   treeNBayesVSlogRegKnn <- treeNBayes - logRegKnn #1001 vs 0110 #0110 Wins
-
-   ensembleDF$ensembleChurnPred <- ifelse(ensembleDF$treeChurnPred
-                                          + ensembleDF$logitChurnRegPred == 2,
-                                          1, 0)
-
-   ensembleDF$ensembleChurnPred <- ifelse(ensembleDF$treeChurnPred
-                                          + ensembleDF$knnChurnPred == 2,
-                                          1, 0)
-
-   ensembleDF$ensembleChurnPred <- ifelse(ensembleDF$treeChurnPred
-                                          + ensembleDF$nBayesChurnPred == 2,
-                                          0, 1)
-
-   ensembleDF$ensembleChurnPred <- ifelse(ensembleDF$treeChurnPred
-                                          + ensembleDF$logitChurnRegPred
-                                          + ensembleDF$knnChurnPred
-                                          + ensembleDF$nBayesChurnPred >= 3,
-                                          1, 0)
-
-
-   ensemblePred <- ensembleDF$ensembleChurnPred
-   ensembleActual <- ensembleDF$Churn
+   ensemblePred <- ensembleDF$ensemblePred
+   ensembleActual <- ensembleDF[, variableToPredict]
    ensembleCM <- table(ensemblePred, ensembleActual)
-
+   print(ensembleCM)
    ensembleTP <- ensembleCM[2,2]
    ensembleTN <- ensembleCM[1,1]
    ensembleFP <- ensembleCM[2,1]
@@ -587,7 +602,7 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
    assign('eResultsComplete', eResultsComplete, envir = .GlobalEnv)
 }
 
-#Exports the churn modeling results as a '.csv' file
+#Exports the modeling results as a '.csv' file
 writeModelingResultsCSVFile <- function() {
    write.csv(eResultsComplete, "~/Documents/github/RDataModeler/R_Data_Modeler_Results.csv")
 }
@@ -598,7 +613,7 @@ compareDFs <- function(testDF, trueDF) {
    return(equal)
 }
 
-calcModelCM <- function(resultsTable, numUniqueValues) {
+calcModelCM <- function(resultsTable, numUniqueValues, modelType) {
    #Builds the confusion matrices, otherwise known as contingency matrices of 
    #predicted vs actual results, and an empty vector in which to place them
    cm1 <- matrix(0, nrow = 2, ncol = 2)
@@ -607,7 +622,7 @@ calcModelCM <- function(resultsTable, numUniqueValues) {
    
    #If the number of unique variables is binary, then the results table and 
    #confusion matrix are identical to one another
-   if (numUniqueValues == 2) {
+   if (numUniqueValues == 2 | modelType == 'logisticRegression') {
       cm2[2,2] <- resultsTable[2,2]
       cm2[1,1] <- resultsTable[1,1]
       cm2[2,1] <- resultsTable[2,1]
@@ -841,22 +856,24 @@ main <- function() {
                                            printResults)
    
    eMR <- createEnsembleMethodsModel(dtMR, lgMR, knnMR, nbMR, bR,
-                                     trainTestDFsList, printResults)
+                                     trainTestDFsList, 
+                                     variableToPredict, 
+                                     printResults)
 }
 
 main()
 
 #For manual debugging & testing purposes
 
-# baseDF <- createBaseDF('Telco_Customer_Churn.csv')
-# predefinedToRemoveColumnsList <- c('customerID', 'TotalCharges', 'PaperlessBilling', 'PaymentMethod')
-# predefinedVariableToPredict <- 'Churn'
-# adjustedDF <- adjustBaseDF(predefinedToRemoveColumnsList, baseDF)
-# variableToPredict <- selectVariableToPredict(adjustedDF)
-# factorizedDF <- factorizeDF(adjustedDF)
-# trainTestDFsList <- splitIntoTrainingTestingDFs(factorizedDF)
-# bR <- createBaseResults(trainTestDFsList, variableToPredict)
-# dtMR <- createDecisionTreeModel(trainTestDFsList, variableToPredict, TRUE)
-# lgMR <- createLogisticRegressionModel(trainTestDFsList, variableToPredict, TRUE)
-# knnMR <- createKNearestNeighborsModel(trainTestDFsList, variableToPredict, TRUE)
-# nbMR <- createNaiveBayesClassifierModel(trainTestDFsList, variableToPredict, TRUE)
+ # baseDF <- createBaseDF('Telco_Customer_Churn.csv')
+ # predefinedToRemoveColumnsList <- c('customerID', 'TotalCharges', 'PaperlessBilling', 'PaymentMethod')
+ # predefinedVariableToPredict <- 'Churn'
+ # adjustedDF <- adjustBaseDF(predefinedToRemoveColumnsList, baseDF)
+ # variableToPredict <- selectVariableToPredict(adjustedDF)
+ # factorizedDF <- factorizeDF(adjustedDF)
+ # trainTestDFsList <- splitIntoTrainingTestingDFs(factorizedDF)
+ # bR <- createBaseResults(trainTestDFsList, variableToPredict)
+ # dtMR <- createDecisionTreeModel(trainTestDFsList, variableToPredict, TRUE)
+ # lgMR <- createLogisticRegressionModel(trainTestDFsList, variableToPredict, TRUE)
+ # knnMR <- createKNearestNeighborsModel(trainTestDFsList, variableToPredict, TRUE)
+ # nbMR <- createNaiveBayesClassifierModel(trainTestDFsList, variableToPredict, TRUE)
