@@ -282,14 +282,7 @@ createDecisionTreeModel <- function(trainTestDFsList,
    }
    
    decisionTreeResults <- list('dtPred' = treePred,
-                               'dtSen' = avgTreeResults[SENSITIVITY],
-                               'dtSpe' = avgTreeResults[SPECIFICITY],
-                               'dtAcc' = avgTreeResults[ACCURACY],
-                               'dtBalAcc' = avgTreeResults[BALANCEDACCURACY],
-                               'dtTP' = avgTreeCM[2,2], 
-                               'dtTN' = avgTreeCM[1,1],
-                               'dtFP' = avgTreeCM[2,1], 
-                               'dtFN' = avgTreeCM[1,2])
+                               'dtTable' = treeTable)
    
    return(decisionTreeResults)
 }
@@ -356,14 +349,7 @@ createLogisticRegressionModel <- function(trainTestDFsList,
    }
 
    logitRegResults <- list('lgPred' = logitRegPred,
-                           'lgSen' = avgLogitRegResults[SENSITIVITY],
-                           'lgSpe' = avgLogitRegResults[SPECIFICITY],
-                           'lgAcc' = avgLogitRegResults[ACCURACY],
-                           'lgBalAcc' = avgLogitRegResults[BALANCEDACCURACY],
-                           'lgTP' = avgLogitRegCM[2,2], 
-                           'lgTN' = avgLogitRegCM[1,1],
-                           'lgFP' = avgLogitRegCM[2,1], 
-                           'lgFN' = avgLogitRegCM[1,2])
+                           'lgTable' = logitRegTable)
    
    return(logitRegResults)
 }
@@ -426,14 +412,7 @@ createKNearestNeighborsModel <- function(trainTestDFsList,
    }
 
    knnResults <- list('knnPred' = knnPred,
-                      'knnSen' = avgKNNResults[SENSITIVITY],
-                      'knnSpe' = avgKNNResults[SPECIFICITY],
-                      'knnAcc' = avgKNNResults[ACCURACY],
-                      'knnBalAcc' = avgKNNResults[BALANCEDACCURACY],
-                      'knnTP' = avgKNNCM[2,2], 
-                      'knnTN' = avgKNNCM[1,1],
-                      'knnFP' = avgKNNCM[2,1], 
-                      'knnFN' = avgKNNCM[1,2])
+                      'knnTable' = knnTable)
 
    return(knnResults)
 }
@@ -491,14 +470,7 @@ createNaiveBayesClassifierModel <- function(trainTestDFsList,
    }
 
    nBayesResults <- list('nbPred' = nBayesPredClass,
-                         'nbSen' = avgNBayesResults[SENSITIVITY],
-                         'nbSpe' = avgNBayesResults[SPECIFICITY],
-                         'nbAcc' = avgNBayesResults[ACCURACY],
-                         'nbBalAcc' = avgNBayesResults[BALANCEDACCURACY],
-                         'nbTP' = avgNBayesCM[2,2], 
-                         'nbTN' = avgNBayesCM[1,1],
-                         'nbFP' = avgNBayesCM[2,1], 
-                         'nbFN' = avgNBayesCM[1,2])
+                         'nbTable' = nBayesTable)
 
    return(nBayesResults)
 }
@@ -535,8 +507,7 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
    ensembleDF$nBayesPred <- nbR$nbPred
    ensembleDF$ensemblePred <- 'NA'
    
-   modelBalAccs <- c(dtR$dtBalAcc, lgR$lgBalAcc, knnR$knnBalAcc, nbR$nbBalAcc)
-   minBalAccModel <- which.min(modelBalAccs)
+   modelBalAccs <- c()
    
    #Factors can cause issues and so therefore must be removed
    ensembleDF <- remove.factors(ensembleDF)
@@ -550,6 +521,21 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
 
    for (i in 1:nrow(ensembleDF)) {
       for (j in 1:4) {
+         
+         if (j == 1) {
+            modelBalAccs <- append(modelBalAccs, dtR$dtTable["Balanced Accuracy", ensembleDF[i,j+1]])
+         }
+         else if (j == 2) {
+            modelBalAccs <- append(modelBalAccs, lgR$lgTable["Balanced Accuracy", "Average"])
+         }
+         else if (j == 3) {
+            modelBalAccs <- append(modelBalAccs, knnR$knnTable["Balanced Accuracy", ensembleDF[i,j+1]])
+         }
+         else if (j == 4) {
+            modelBalAccs <- append(modelBalAccs, nbR$nbTable["Balanced Accuracy", ensembleDF[i,j+1]])
+         }
+         #print(ensembleDF[i,j+1])
+         
          for (k in 1:nrow(votesMatrix)) {
             if (ensembleDF[i,j+1] == uniqueValues[k]) {
                votesMatrix[k,j] <- 1 
@@ -557,7 +543,15 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
          }
       }
       #Removes the least accurate model's vote to avoid ties or deadlocks
+      minBalAccModel <- which.min(modelBalAccs)
+      
       votesMatrix[,minBalAccModel] <- 0
+      
+      #For Debugging Purposes
+      print(modelBalAccs)
+      print(paste('Index of Least Accurate Voting Model: ', minBalAccModel))
+      
+      modelBalAccs <- c()
       
       #Determines the winning vote
       votesMatrix$WeightedTotal <- rowSums(votesMatrix[,c(1:4)])
@@ -565,8 +559,9 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
       maxVoteValueName <- rownames(votesMatrix[maxVoteValueIndex,])
       
       #For Debugging Purposes
-      #print(votesMatrix)
-      #print(maxVoteValueName)
+      print(votesMatrix)
+      print(maxVoteValueName)
+      cat("\n")
       
       ensembleDF[i,6] <- maxVoteValueName
       
@@ -590,17 +585,17 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
    avgEnsembleCM <- avgEnsembleOutput[[CONFUSIONMATRIX]]
 
    #Collects the various model results into easily comparable tables
-   eResultsAccuracy <- c(dtR$dtAcc, 
-                         lgR$lgAcc, 
-                         knnR$knnAcc,
-                         nbR$nbAcc, 
+   eResultsAccuracy <- c(dtR$dtTable["Accuracy", "Average"], 
+                         lgR$lgTable["Accuracy", "Average"], 
+                         knnR$knnTable["Accuracy", "Average"],
+                         nbR$nbTable["Accuracy", "Average"], 
                          avgEnsembleResults[ACCURACY], 
                          bR$bAcc)
    
-   eResultsBalancedAccuracy <- c(dtR$dtBalAcc,
-                                 lgR$lgBalAcc,
-                                 knnR$knnBalAcc,
-                                 nbR$nbBalAcc,
+   eResultsBalancedAccuracy <- c(dtR$dtTable["Balanced Accuracy", "Average"],
+                                 lgR$lgTable["Balanced Accuracy", "Average"],
+                                 knnR$knnTable["Balanced Accuracy", "Average"],
+                                 nbR$nbTable["Balanced Accuracy", "Average"],
                                  avgEnsembleResults[BALANCEDACCURACY],
                                  bR$bBalAcc)
    
@@ -617,10 +612,34 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
                                   "Actual Results")
 
    #Row binds all TP, TN, FP & FN counts into one combined Confusion Matrix
-   eResultsTP <- c(dtR$dtTP, lgR$lgTP, knnR$knnTP, nbR$nbTP, avgEnsembleCM[2,2], bR$bTP)
-   eResultsTN <- c(dtR$dtTN, lgR$lgTN, knnR$knnTN, nbR$nbTN, avgEnsembleCM[1,1], bR$bTN)
-   eResultsFP <- c(dtR$dtFP, lgR$lgFP, knnR$knnFP, nbR$nbFP, avgEnsembleCM[2,1], bR$bFP)
-   eResultsFN <- c(dtR$dtFN, lgR$lgFN, knnR$knnFN, nbR$nbFN, avgEnsembleCM[1,2], bR$bFN)
+   eResultsTP <- c(dtR$dtTable["True Positives", "Average"], 
+                   lgR$lgTable["True Positives", "Average"], 
+                   knnR$knnTable["True Positives", "Average"], 
+                   nbR$nbTable["True Positives", "Average"], 
+                   avgEnsembleCM[2,2], 
+                   bR$bTP)
+   
+   eResultsTN <- c(dtR$dtTable["True Negatives", "Average"], 
+                   lgR$lgTable["True Negatives", "Average"], 
+                   knnR$knnTable["True Negatives", "Average"], 
+                   nbR$nbTable["True Negatives", "Average"], 
+                   avgEnsembleCM[1,1], 
+                   bR$bTN)
+   
+   eResultsFP <- c(dtR$dtTable["False Positives", "Average"], 
+                   lgR$lgTable["False Positives", "Average"], 
+                   knnR$knnTable["False Positives", "Average"], 
+                   nbR$nbTable["False Positives", "Average"], 
+                   avgEnsembleCM[2,1], 
+                   bR$bFP)
+   
+   eResultsFN <- c(dtR$dtTable["False Negatives", "Average"], 
+                   lgR$lgTable["False Negatives", "Average"], 
+                   knnR$knnTable["False Negatives", "Average"], 
+                   nbR$nbTable["False Negatives", "Average"], 
+                   avgEnsembleCM[1,2], 
+                   bR$bFN)
+   
    eResultsCM <- rbind(eResultsTP, eResultsTN, eResultsFP, eResultsFN)
 
    #Renames the rows and columns of the 'eResultsCM' accordingly
@@ -763,7 +782,7 @@ concentrateModelResults <- function(cmList, avgCM, avgResults,
       modelResultsTable[2,i] <- modelResults[BALANCEDACCURACY]
       modelResultsTable[3,i] <- cm[2,2]
       modelResultsTable[4,i] <- cm[1,1]
-      modelResultsTable[5,i] <- cm[2,2]
+      modelResultsTable[5,i] <- cm[2,1]
       modelResultsTable[6,i] <- cm[1,2]
       
       i <- i + 1
