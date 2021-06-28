@@ -476,8 +476,9 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
    uniqueValues <- unique(testingDF[, variableToPredict])
    numUniqueValues <- length(uniqueValues)
    
-   print(uniqueValues[1])
-   print(uniqueValues[2])
+   #For Debugging Purposes
+   #print(uniqueValues[1])
+   #print(uniqueValues[2])
    
    #Creates the voting matrix
    votesMatrix <- data.frame(matrix(0, nrow = numUniqueValues, ncol = 4))
@@ -497,7 +498,7 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
    modelBalAccs <- c(dtR$dtBalAcc, lgR$lgBalAcc, knnR$knnBalAcc, nbR$nbBalAcc)
    minBalAccModel <- which.min(modelBalAccs)
    
-   #Factors become 'NAN' values when setting them to binary values; must be removed
+   #Factors can cause issues and so therefore must be removed
    ensembleDF <- remove.factors(ensembleDF)
    
    if(ensembleDF$logitRegPred == 0) {
@@ -506,8 +507,6 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
    else {
       ensembleDF$logitRegPred <- uniqueValues[2]
    }
-   #ensembleDF$logitRegPred[ensembleDF$logitRegPred > 0] <- uniqueValues[2]
-   #ensembleDF$logitRegPred[ensembleDF$logitRegPred == 0] <- uniqueValues[1]
 
    for (i in 1:nrow(ensembleDF)) {
       for (j in 1:4) {
@@ -526,8 +525,8 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
       maxVoteValueName <- rownames(votesMatrix[maxVoteValueIndex,])
       
       #For Debugging Purposes
-      print(votesMatrix)
-      print(maxVoteValueName)
+      #print(votesMatrix)
+      #print(maxVoteValueName)
       
       ensembleDF[i,6] <- maxVoteValueName
       
@@ -537,32 +536,39 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
 
    ensemblePred <- ensembleDF$ensemblePred
    ensembleActual <- ensembleDF[, variableToPredict]
-   ensembleCM <- table(ensemblePred, ensembleActual)
-   print(ensembleCM)
-   ensembleTP <- ensembleCM[2,2]
-   ensembleTN <- ensembleCM[1,1]
-   ensembleFP <- ensembleCM[2,1]
-   ensembleFN <- ensembleCM[1,2]
+   ensembleResultsTable <- table(ensemblePred, ensembleActual)
+   
+   ensembleCMList <- calcModelCM(ensembleResultsTable, 
+                                 numUniqueValues, 
+                                 'kNearestNeighbors')
+   
+   avgEnsembleOutput <- calcAvgModelCM(ensembleCMList, 
+                                       uniqueValues, 
+                                       numUniqueValues)
 
-   ensembleSensitivity <- (ensembleTP / (ensembleTP + ensembleFN))
-   ensembleSpecificity <- (ensembleTN / (ensembleTN + ensembleFP))
-   ensembleAccuracy <- ((ensembleTP + ensembleTN) /
-                        (ensembleTP + ensembleTN + ensembleFP + ensembleFN))
-   ensembleBalancedAccuracy <- ((ensembleSensitivity + ensembleSpecificity) / 2)
+   avgEnsembleResults <- avgEnsembleOutput[[RESULTS]]
+   avgEnsembleCM <- avgEnsembleOutput[[CONFUSIONMATRIX]]
 
    #Collects the various model results into easily comparable tables
-   eResultsAccuracy <- c(dtR$dtAcc, lgR$lgAcc, knnR$knnAcc,
-                         nbR$nbAcc, ensembleAccuracy, bR$bAcc)
+   eResultsAccuracy <- c(dtR$dtAcc, 
+                         lgR$lgAcc, 
+                         knnR$knnAcc,
+                         nbR$nbAcc, 
+                         avgEnsembleResults[ACCURACY], 
+                         bR$bAcc)
+   
    eResultsBalancedAccuracy <- c(dtR$dtBalAcc,
                                  lgR$lgBalAcc,
                                  knnR$knnBalAcc,
                                  nbR$nbBalAcc,
-                                 ensembleBalancedAccuracy,
+                                 avgEnsembleResults[BALANCEDACCURACY],
                                  bR$bBalAcc)
+   
    eResultsOverall <- rbind(eResultsAccuracy, eResultsBalancedAccuracy)
 
    rownames(eResultsOverall) <- c("Accuracy",
                                   "Balanced Accuracy")
+   
    colnames(eResultsOverall) <- c("Decision Tree",
                                   "Logistic Regression",
                                   "K-Nearest Neighbors",
@@ -571,10 +577,10 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
                                   "Actual Results")
 
    #Row binds all TP, TN, FP & FN counts into one combined Confusion Matrix
-   eResultsTP <- c(dtR$dtTP, lgR$lgTP, knnR$knnTP, nbR$nbTP, ensembleTP, bR$bTP)
-   eResultsTN <- c(dtR$dtTN, lgR$lgTN, knnR$knnTN, nbR$nbTN, ensembleTN, bR$bTN)
-   eResultsFP <- c(dtR$dtFP, lgR$lgFP, knnR$knnFP, nbR$nbFP, ensembleFP, bR$bFP)
-   eResultsFN <- c(dtR$dtFN, lgR$lgFN, knnR$knnFN, nbR$nbFN, ensembleFN, bR$bFN)
+   eResultsTP <- c(dtR$dtTP, lgR$lgTP, knnR$knnTP, nbR$nbTP, avgEnsembleCM[2,2], bR$bTP)
+   eResultsTN <- c(dtR$dtTN, lgR$lgTN, knnR$knnTN, nbR$nbTN, avgEnsembleCM[1,1], bR$bTN)
+   eResultsFP <- c(dtR$dtFP, lgR$lgFP, knnR$knnFP, nbR$nbFP, avgEnsembleCM[2,1], bR$bFP)
+   eResultsFN <- c(dtR$dtFN, lgR$lgFN, knnR$knnFN, nbR$nbFN, avgEnsembleCM[1,2], bR$bFN)
    eResultsCM <- rbind(eResultsTP, eResultsTN, eResultsFP, eResultsFN)
 
    #Renames the rows and columns of the 'eResultsCM' accordingly
@@ -582,6 +588,7 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
                              "True Negatives",
                              "False Positives",
                              "False Negatives")
+   
    colnames(eResultsCM) <- c("Decision Tree",
                              "Logistic Regression",
                              "K-Nearest Neighbors",
@@ -799,9 +806,11 @@ readInputs <- function(promptMessage) {
 main <- function() {
    arguments <- getArguments()
    autoTest <- arguments[1]
-   print(autoTest)
    csvFileName <- arguments[2]
-   print(csvFileName)
+   
+   #For Debugging Purposes
+   print(paste('Auto Test Value: ', autoTest))
+   print(paste('CSV File Value: ', csvFileName))
    
    if (autoTest == TRUE) {
       baseDF <- createBaseDF('Telco_Customer_Churn.csv')
