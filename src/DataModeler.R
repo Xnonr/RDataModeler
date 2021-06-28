@@ -262,14 +262,16 @@ createDecisionTreeModel <- function(trainTestDFsList,
    avgTreeResults <- avgTreeOutput[[RESULTS]]
    avgTreeCM <- avgTreeOutput[[CONFUSIONMATRIX]]
    
+   treeTable <- concentrateModelResults(treeCMList, 
+                                        avgTreeCM, 
+                                        avgTreeResults, 
+                                        uniqueValues, 
+                                        numUniqueValues)
+   
    if (printTF == TRUE) {
       printModelResults('Decision Tree Model', 
                         variableToPredict, 
-                        treeCMList, 
-                        avgTreeCM, 
-                        avgTreeResults,
-                        uniqueValues, 
-                        numUniqueValues)
+                        treeTable)
       
       # printAverageModelResults('Decision Tree Model Average', 
       #                           variableToPredict, avgTreeCM, 
@@ -333,15 +335,17 @@ createLogisticRegressionModel <- function(trainTestDFsList,
    avgLogitRegResults <- avgLogitRegOutput[[RESULTS]]
    avgLogitRegCM <- avgLogitRegOutput[[CONFUSIONMATRIX]]
 
+   logitRegTable <- concentrateModelResults(logitRegCMList, 
+                                            avgLogitRegCM, 
+                                            avgLogitRegResults, 
+                                            uniqueValues, 
+                                            numUniqueValues)
+   
    #Prints out the Logistic Regression Model results
    if (printTF == TRUE) {
-      printModelResults('Logistic Regression Model',
+      printModelResults('Logistic Regression Model', 
                         variableToPredict, 
-                        logitRegCMList, 
-                        avgLogitRegCM, 
-                        avgLogitRegResults, 
-                        uniqueValues,
-                        numUniqueValues)
+                        logitRegTable)
       
       # printAverageModelResults('Logistic Regression Model Average', 
       #                           variableToPredict, avgLogitRegCM, 
@@ -402,14 +406,16 @@ createKNearestNeighborsModel <- function(trainTestDFsList,
    avgKNNResults <- avgKNNOutput[[RESULTS]]
    avgKNNCM <- avgKNNOutput[[CONFUSIONMATRIX]]
 
+   knnTable <- concentrateModelResults(knnCMList, 
+                                       avgKNNCM, 
+                                       avgKNNResults, 
+                                       uniqueValues, 
+                                       numUniqueValues)
+   
    if (printTF == TRUE) {
       printModelResults('K-Nearest Neighbor Model', 
                         variableToPredict, 
-                        knnCMList, 
-                        avgKNNCM, 
-                        avgKNNResults, 
-                        uniqueValues, 
-                        numUniqueValues)
+                        knnTable)
       
       # printAverageModelResults('K-Nearest Neighbor Model Average', 
       #                           variableToPredict, avgKNNCM, 
@@ -464,15 +470,17 @@ createNaiveBayesClassifierModel <- function(trainTestDFsList,
    avgNBayesResults <- avgNBayesOutput[[RESULTS]]
    avgNBayesCM <- avgNBayesOutput[[CONFUSIONMATRIX]]
 
+   nBayesTable <- concentrateModelResults(nBayesCMList, 
+                                          avgNBayesCM, 
+                                          avgNBayesResults, 
+                                          uniqueValues, 
+                                          numUniqueValues)
+   
    #Prints out the Naive Bayes Classifier Model results
    if (printTF == TRUE) {
       printModelResults('Naive Bayes Classifier Model', 
                         variableToPredict, 
-                        nBayesCMList, 
-                        avgNBayesCM, 
-                        avgNBayesResults, 
-                        uniqueValues, 
-                        numUniqueValues)
+                        nBayesTable)
       
       # printAverageModelResults('Naive Bayes Classifier Model Average', 
       #                           variableToPredict, avgNBayesCM, 
@@ -734,9 +742,9 @@ calcModelResults <- function(tP, tN, fP, fN) {
    return(results)
 }
 
-printModelResults <- function(modelName, variable, cmList, avgCM, avgResults, 
-                              uniqueValues, numUniqueValues) {
-
+concentrateModelResults <- function(cmList, avgCM, avgResults, 
+                                    uniqueValues, numUniqueValues) {
+   
    if (numUniqueValues == 2) {
       modelResultsTable <- matrix(0, nrow = 6, ncol = 1)
       colnames(modelResultsTable) <- "Average"
@@ -773,7 +781,6 @@ printModelResults <- function(modelName, variable, cmList, avgCM, avgResults,
       colnames(modelResultsTable)[i] <- "Average"
    }
    
-    
    rownames(modelResultsTable) <- c("Accuracy", 
                                     "Balanced Accuracy", 
                                     "True Positives", 
@@ -781,6 +788,10 @@ printModelResults <- function(modelName, variable, cmList, avgCM, avgResults,
                                     "False Positives", 
                                     "False Negatives")
    
+   return(modelResultsTable)
+}
+
+printModelResults <- function(modelName, variable, modelResultsTable) {
    print(modelName)
    print(paste('Modeled Variable: ', variable))
    cat('\n')
@@ -900,6 +911,7 @@ main <- function() {
    #For Debugging Purposes
    print(paste('Auto Test Value: ', autoTest))
    print(paste('CSV File Value: ', csvFileName))
+   cat('\n')
    
    if (autoTest == TRUE) {
       baseDF <- createBaseDF('Telco_Customer_Churn.csv')
@@ -909,7 +921,7 @@ main <- function() {
       
       adjustedDF <- adjustBaseDF(predefinedToRemoveColumnsList, baseDF)
       
-      variableToPredict <- 'Churn'
+      variableToPredict <- 'Contract'
    }
    
    else {
