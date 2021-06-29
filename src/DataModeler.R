@@ -521,20 +521,38 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
 
    for (i in 1:nrow(ensembleDF)) {
       for (j in 1:4) {
-         
          if (j == 1) {
-            modelBalAccs <- append(modelBalAccs, dtR$dtTable["Balanced Accuracy", ensembleDF[i,j+1]])
+            if (numUniqueValues > 2) {
+               modelBalAccs <- append(modelBalAccs, dtR$dtTable["Balanced Accuracy", ensembleDF[i,j+1]])
+            }
+            else {
+               modelBalAccs <- append(modelBalAccs, dtR$dtTable["Balanced Accuracy", "Average"])
+            }
          }
          else if (j == 2) {
-            modelBalAccs <- append(modelBalAccs, lgR$lgTable["Balanced Accuracy", "Average"])
+            if (numUniqueValues > 2) {
+               modelBalAccs <- append(modelBalAccs, lgR$lgTable["Balanced Accuracy", "Average"])
+            }
+            else {
+               modelBalAccs <- append(modelBalAccs, lgR$lgTable["Balanced Accuracy", "Average"])
+            }
          }
          else if (j == 3) {
-            modelBalAccs <- append(modelBalAccs, knnR$knnTable["Balanced Accuracy", ensembleDF[i,j+1]])
+            if (numUniqueValues > 2) {
+               modelBalAccs <- append(modelBalAccs, knnR$knnTable["Balanced Accuracy", ensembleDF[i,j+1]])
+            }
+            else {
+               modelBalAccs <- append(modelBalAccs, knnR$knnTable["Balanced Accuracy", "Average"])
+            }
          }
          else if (j == 4) {
-            modelBalAccs <- append(modelBalAccs, nbR$nbTable["Balanced Accuracy", ensembleDF[i,j+1]])
+            if (numUniqueValues > 2) {
+               modelBalAccs <- append(modelBalAccs, nbR$nbTable["Balanced Accuracy", ensembleDF[i,j+1]])
+            }
+            else {
+               modelBalAccs <- append(modelBalAccs, nbR$nbTable["Balanced Accuracy", "Average"])
+            }
          }
-         #print(ensembleDF[i,j+1])
          
          for (k in 1:nrow(votesMatrix)) {
             if (ensembleDF[i,j+1] == uniqueValues[k]) {
@@ -551,10 +569,17 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
       print(modelBalAccs)
       print(paste('Index of Least Accurate Voting Model: ', minBalAccModel))
       
-      modelBalAccs <- c()
-      
       #Determines the winning vote
       votesMatrix$WeightedTotal <- rowSums(votesMatrix[,c(1:4)])
+      
+      if (max(votesMatrix$WeightedTotal) < 2) {
+         votesMatrix$treePred <- votesMatrix$treePred * modelBalAccs[1]
+         votesMatrix$logisticRegPred <- votesMatrix$logisticRegPred * modelBalAccs[2]
+         votesMatrix$knnPred <- votesMatrix$knnPred * modelBalAccs[3]
+         votesMatrix$nBayesPred <- votesMatrix$nBayesPred * modelBalAccs[4]
+         
+         votesMatrix$WeightedTotal <- rowSums(votesMatrix[,c(1:4)])
+      }
       maxVoteValueIndex <- which.max(votesMatrix$WeightedTotal)
       maxVoteValueName <- rownames(votesMatrix[maxVoteValueIndex,])
       
@@ -566,6 +591,7 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
       ensembleDF[i,6] <- maxVoteValueName
       
       #Reset the votes matrix for the next row
+      modelBalAccs <- c()
       votesMatrix[votesMatrix > 0] <- 0
    }
 
