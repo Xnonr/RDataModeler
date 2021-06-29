@@ -134,7 +134,6 @@ factorizeDF <- function(toFactorizeDF) {
       }
          
    }
-   
    return(toFactorizeDF)
 }
 
@@ -213,6 +212,56 @@ createBaseResults <- function(trainTestDFsList, variableToPredict) {
                        'bFN' = avgBaseCM[1,2])
 
    return(baseResults)
+}
+
+#Linear Regression Model
+createLinearRegressionModel <- function(trainTestDFsList, 
+                                        variableToPredict, 
+                                        printTF) {
+   testingDF <- trainTestDFsList$testDF
+   trainingDF <- trainTestDFsList$trainDF
+   
+   linRegFormula <- paste(variableToPredict, '~ .')
+   
+   linRegFit1 <- lm(formula = linRegFormula, 
+                   data = trainingDF)
+   
+   ss <- coef(summary(linRegFit1))
+   ss_sig <- ss[ss[,"Pr(>|t|)"] < 0.05,]
+   
+   significantVariables <- c(variableToPredict)
+   
+   for (i in colnames(trainingDF)) {
+      for (j in names(ss_sig[,"Pr(>|t|)"])) {
+         if (grepl(i, j, fixed = TRUE)) {
+            print(paste(i,j))
+            significantVariables <- c(significantVariables, i)
+         }
+      }
+   }
+   
+   insignificantVariables <- setdiff(colnames(trainingDF), 
+                                     significantVariables)
+   
+   trainingDF <- trainingDF[ , ! names(trainingDF) %in% insignificantVariables]
+   
+   linRegFit2 <- lm(formula = linRegFormula, 
+                   data = trainingDF)
+   
+   linRegPred <- round(predict(linRegFit2, testingDF))
+   linRegActual <- testingDF[, variableToPredict]
+   
+   linRegResultsTable <- cbind(linRegPred, linRegActual)
+   
+   if (printTF == TRUE) {
+      #print(head(linRegResultsTable, 50))
+      print(significantVariables)
+      print(insignificantVariables)
+      print(summary(linRegFit1))
+      print(paste('Linear Regression Model 1 Accuracy: ', summary(linRegFit1)$adj.r.squared))
+      print(summary(linRegFit2))
+      print(paste('Linear Regression Model 2 Accuracy: ', summary(linRegFit2)$adj.r.squared))
+   }
 }
 
 #Decision Tree Model
@@ -566,8 +615,8 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
       votesMatrix[,minBalAccModel] <- 0
       
       #For Debugging Purposes
-      print(modelBalAccs)
-      print(paste('Index of Least Accurate Voting Model: ', minBalAccModel))
+      #print(modelBalAccs)
+      #print(paste('Index of Least Accurate Voting Model: ', minBalAccModel))
       
       #Determines the winning vote
       votesMatrix$WeightedTotal <- rowSums(votesMatrix[,c(1:4)])
@@ -584,9 +633,9 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
       maxVoteValueName <- rownames(votesMatrix[maxVoteValueIndex,])
       
       #For Debugging Purposes
-      print(votesMatrix)
-      print(maxVoteValueName)
-      cat("\n")
+      #print(votesMatrix)
+      #print(maxVoteValueName)
+      #cat("\n")
       
       ensembleDF[i,6] <- maxVoteValueName
       
@@ -966,7 +1015,7 @@ main <- function() {
       
       adjustedDF <- adjustBaseDF(predefinedToRemoveColumnsList, baseDF)
       
-      variableToPredict <- 'Contract'
+      variableToPredict <- 'tenure'
    }
    
    else {
@@ -985,35 +1034,49 @@ main <- function() {
    }
 
    factorizedDF <- factorizeDF(adjustedDF)
+   
+   uniqueValuesType <- typeof(factorizedDF[, variableToPredict])
+   numUniqueValues <- n_distinct(factorizedDF[, variableToPredict])
+   
    trainTestDFsList <- splitIntoTrainingTestingDFs(factorizedDF)
 
    printResults <- TRUE
    if (autoTest == FALSE) {
       printResults <- printTFQuestionaire()
    }
-
-   bR <- createBaseResults(trainTestDFsList, variableToPredict)
    
-   dtMR <- createDecisionTreeModel(trainTestDFsList, 
-                                   variableToPredict, 
-                                   printResults)
-   
-   lgMR <- createLogisticRegressionModel(trainTestDFsList, 
-                                         variableToPredict, 
-                                         printResults)
-   
-   knnMR <- createKNearestNeighborsModel(trainTestDFsList, 
-                                         variableToPredict, 
-                                         printResults)
-   
-   nbMR <- createNaiveBayesClassifierModel(trainTestDFsList, 
-                                           variableToPredict, 
-                                           printResults)
-   
-   eMR <- createEnsembleMethodsModel(dtMR, lgMR, knnMR, nbMR, bR,
-                                     trainTestDFsList, 
-                                     variableToPredict, 
-                                     printResults)
+   if (numUniqueValues > 5 & (uniqueValuesType == 'integer' | uniqueValuesType == 'double')) {
+      linRMR <- createLinearRegressionModel(trainTestDFsList, 
+                                            variableToPredict, 
+                                            printResults)
+   }
+   else if (numUniqueValues <= 5) {
+      bR <- createBaseResults(trainTestDFsList, variableToPredict)
+      
+      dtMR <- createDecisionTreeModel(trainTestDFsList, 
+                                      variableToPredict, 
+                                      printResults)
+      
+      lgMR <- createLogisticRegressionModel(trainTestDFsList, 
+                                            variableToPredict, 
+                                            printResults)
+      
+      knnMR <- createKNearestNeighborsModel(trainTestDFsList, 
+                                            variableToPredict, 
+                                            printResults)
+      
+      nbMR <- createNaiveBayesClassifierModel(trainTestDFsList, 
+                                              variableToPredict, 
+                                              printResults)
+      
+      eMR <- createEnsembleMethodsModel(dtMR, lgMR, knnMR, nbMR, bR,
+                                        trainTestDFsList, 
+                                        variableToPredict, 
+                                        printResults)
+   }
+   else {
+      print('This variable cannot currently be modeled, please try again.')
+   }
 }
 
 main()
@@ -1026,8 +1089,10 @@ main()
  # adjustedDF <- adjustBaseDF(predefinedToRemoveColumnsList, baseDF)
  # variableToPredict <- selectVariableToPredict(adjustedDF)
  # factorizedDF <- factorizeDF(adjustedDF)
+ # numUniqueValues <- n_distinct(factorizedDF[, variableToPredict])
  # trainTestDFsList <- splitIntoTrainingTestingDFs(factorizedDF)
  # bR <- createBaseResults(trainTestDFsList, variableToPredict)
+ # linMR <- createLinearRegressionModel(trainTestDFsList, variableToPredict, TRUE)
  # dtMR <- createDecisionTreeModel(trainTestDFsList, variableToPredict, TRUE)
  # lgMR <- createLogisticRegressionModel(trainTestDFsList, variableToPredict, TRUE)
  # knnMR <- createKNearestNeighborsModel(trainTestDFsList, variableToPredict, TRUE)
