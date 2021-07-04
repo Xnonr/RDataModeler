@@ -234,7 +234,7 @@ createLinearRegressionModel <- function(trainTestDFsList,
    for (i in colnames(trainingDF)) {
       for (j in names(ss_sig[,"Pr(>|t|)"])) {
          if (grepl(i, j, fixed = TRUE)) {
-            print(paste(i,j))
+            #print(paste(i,j))
             significantVariables <- c(significantVariables, i)
          }
       }
@@ -246,15 +246,15 @@ createLinearRegressionModel <- function(trainTestDFsList,
    trainingDF <- trainingDF[ , ! names(trainingDF) %in% insignificantVariables]
    
    linRegFit2 <- lm(formula = linRegFormula, 
-                   data = trainingDF)
+                    data = trainingDF)
    
-   linRegPred <- round(predict(linRegFit2, testingDF))
+   linRegPred <- predict(linRegFit2, testingDF)
    linRegActual <- testingDF[, variableToPredict]
    
    linRegResultsTable <- cbind(linRegPred, linRegActual)
    
    if (printTF == TRUE) {
-      #print(head(linRegResultsTable, 50))
+      print(head(linRegResultsTable, 50))
       print(significantVariables)
       print(insignificantVariables)
       print(summary(linRegFit1))
@@ -1008,14 +1008,16 @@ main <- function() {
    cat('\n')
    
    if (autoTest == TRUE) {
-      baseDF <- createBaseDF('Telco_Customer_Churn.csv')
+      commands <- createBaseDF('commands.csv')
       
-      predefinedToRemoveColumnsList <- c('customerID', 'TotalCharges', 
-                                         'PaperlessBilling', 'PaymentMethod')
+      baseDF <- createBaseDF(commands[1,'csvFileName'])
+      
+      predefinedToRemoveColumnsList <- unlist(strsplit(commands[1,'columnList'], 
+                                                       split = "/"))
       
       adjustedDF <- adjustBaseDF(predefinedToRemoveColumnsList, baseDF)
       
-      variableToPredict <- 'tenure'
+      variableToPredict <- commands[1,'dependentVariable']
    }
    
    else {
@@ -1084,6 +1086,7 @@ main()
 #For manual debugging & testing purposes
 
  # baseDF <- createBaseDF('Telco_Customer_Churn.csv')
+ commands <- createBaseDF('commands.csv')
  # predefinedToRemoveColumnsList <- c('customerID', 'TotalCharges', 'PaperlessBilling', 'PaymentMethod')
  # predefinedVariableToPredict <- 'Churn'
  # adjustedDF <- adjustBaseDF(predefinedToRemoveColumnsList, baseDF)
