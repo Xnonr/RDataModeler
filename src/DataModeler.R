@@ -4,8 +4,8 @@ rm(list = ls()) #Clears the current work space & R Studio Global Environment
 cat("\014") #Clears the R Studio Console
 
 #Installs & imports the desired libraries
+#install.packages('xlsx')
 #install.packages('dplyr') #Remains commented out following instillation
-#install.packages('plyr')
 #install.packages('e1071')
 #install.packages('caret')
 #install.packages('rpart')
@@ -16,8 +16,8 @@ cat("\014") #Clears the R Studio Console
 #install.packages('cluster')
 #install.packages('rpart.plot')
 
+library(xlsx)
 library(dplyr)
-#library(plyr)
 library(e1071)
 library(caret)
 library(rpart)
@@ -736,16 +736,32 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
    #Prints out the Ensemble Method results
    if (printTF == TRUE) {
       print('Model Results Comparison Table')
+      print(paste('Modeled Variable: ', variableToPredict))
       cat('\n')
       print(eResultsComplete)
    }
 
-   assign('eResultsComplete', eResultsComplete, envir = .GlobalEnv)
+   return(eResultsComplete)
 }
 
-#Exports the modeling results as a '.csv' file
-writeModelingResultsCSVFile <- function() {
-   write.csv(eResultsComplete, "~/Documents/github/RDataModeler/R_Data_Modeler_Results.csv")
+#Exports the modeling results as an output .xlsx file
+writeOutputFile <- function(resultsListToSave) {
+   modelNames <- c('DecisionTree', 'LogisticRegression', 'KNearestNeighbors', 
+                   'NaiveBayesClassifier', 'EnsembleMethod')
+   
+   for (i in 1:length(resultsListToSave)) {
+      if (i == 1) {
+         appendTF <- FALSE
+      }
+      else {
+         appendTF <- TRUE
+      }
+      write.xlsx(resultsListToSave[i], 
+                 file = '~/output.xlsx', 
+                 row.names = TRUE, 
+                 sheetName = modelNames[i], 
+                 append = appendTF)
+   }
 }
 
 compareDFs <- function(testDF, trueDF) {
@@ -1053,28 +1069,41 @@ main <- function() {
                                             printResults)
    }
    else if (numUniqueValues <= 5) {
-      bR <- createBaseResults(trainTestDFsList, variableToPredict)
+      baseResults <- createBaseResults(trainTestDFsList, variableToPredict)
       
-      dtMR <- createDecisionTreeModel(trainTestDFsList, 
+      decisionTree <- createDecisionTreeModel(trainTestDFsList, 
                                       variableToPredict, 
                                       printResults)
       
-      lgMR <- createLogisticRegressionModel(trainTestDFsList, 
-                                            variableToPredict, 
-                                            printResults)
+      logisticRegression <- createLogisticRegressionModel(trainTestDFsList, 
+                                                          variableToPredict, 
+                                                          printResults)
       
-      knnMR <- createKNearestNeighborsModel(trainTestDFsList, 
-                                            variableToPredict, 
-                                            printResults)
+      kNearestNeighbors <- createKNearestNeighborsModel(trainTestDFsList, 
+                                                        variableToPredict, 
+                                                        printResults)
       
-      nbMR <- createNaiveBayesClassifierModel(trainTestDFsList, 
-                                              variableToPredict, 
-                                              printResults)
+      naiveBayesClassifier <- createNaiveBayesClassifierModel(trainTestDFsList, 
+                                                              variableToPredict, 
+                                                              printResults)
       
-      eMR <- createEnsembleMethodsModel(dtMR, lgMR, knnMR, nbMR, bR,
-                                        trainTestDFsList, 
-                                        variableToPredict, 
-                                        printResults)
+      ensembleMethod <- createEnsembleMethodsModel(decisionTree, 
+                                                   logisticRegression, 
+                                                   kNearestNeighbors, 
+                                                   naiveBayesClassifier, 
+                                                   baseResults, 
+                                                   trainTestDFsList, 
+                                                   variableToPredict, 
+                                                   printResults)
+      
+      resultsList <- list(decisionTree[2], 
+                          logisticRegression[2], 
+                          kNearestNeighbors[2], 
+                          naiveBayesClassifier[2], 
+                          ensembleMethod)
+      
+      writeOutputFile(resultsList)
+      #print(resultsList)
    }
    else {
       print('This variable cannot currently be modeled, please try again.')
@@ -1086,7 +1115,7 @@ main()
 #For manual debugging & testing purposes
 
  # baseDF <- createBaseDF('Telco_Customer_Churn.csv')
- commands <- createBaseDF('commands.csv')
+ # commands <- createBaseDF('commands.csv')
  # predefinedToRemoveColumnsList <- c('customerID', 'TotalCharges', 'PaperlessBilling', 'PaymentMethod')
  # predefinedVariableToPredict <- 'Churn'
  # adjustedDF <- adjustBaseDF(predefinedToRemoveColumnsList, baseDF)
