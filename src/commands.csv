@@ -1,2 +1,2 @@
-csvFileName,columnList,dependentVariable
-Telco_Customer_Churn.csv,customerID/TotalCharges/PaperlessBilling/PaymentMethod,Churn
+csvFileName,columnList,dependentVariable,saveToDirectory
+Telco_Customer_Churn.csv,customerID/TotalCharges/PaperlessBilling/PaymentMethod,Churn,"~/src/output.xlsx"

@@ -745,7 +745,7 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
 }
 
 #Exports the modeling results as an output .xlsx file
-writeOutputFile <- function(resultsListToSave) {
+writeOutputFile <- function(resultsListToSave, saveToDirectory) {
    modelNames <- c('DecisionTree', 'LogisticRegression', 'KNearestNeighbors', 
                    'NaiveBayesClassifier', 'EnsembleMethod')
    
@@ -757,9 +757,10 @@ writeOutputFile <- function(resultsListToSave) {
          appendTF <- TRUE
       }
       write.xlsx(resultsListToSave[i], 
-                 file = '~/output.xlsx', 
+                 file = saveToDirectory, 
+                 sheetName = modelNames[i],
+                 col.name = TRUE, 
                  row.names = TRUE, 
-                 sheetName = modelNames[i], 
                  append = appendTF)
    }
 }
@@ -1034,6 +1035,8 @@ main <- function() {
       adjustedDF <- adjustBaseDF(predefinedToRemoveColumnsList, baseDF)
       
       variableToPredict <- commands[1,'dependentVariable']
+      
+      saveToDirectory <- commands[1,'saveToDirectory']
    }
    
    else {
@@ -1102,7 +1105,10 @@ main <- function() {
                           naiveBayesClassifier[2], 
                           ensembleMethod)
       
-      writeOutputFile(resultsList)
+      #For use on local machine only, comment out when necessary
+      saveToDirectory <- "~/Documents/github/RDataModeler/src/output.xlsx"
+      
+      writeOutputFile(resultsList, saveToDirectory)
       #print(resultsList)
    }
    else {
@@ -1115,7 +1121,8 @@ main()
 #For manual debugging & testing purposes
 
  # baseDF <- createBaseDF('Telco_Customer_Churn.csv')
- # commands <- createBaseDF('commands.csv')
+  commands <- createBaseDF('commands.csv')
+  print(commands[1,'saveToDirectory'])
  # predefinedToRemoveColumnsList <- c('customerID', 'TotalCharges', 'PaperlessBilling', 'PaymentMethod')
  # predefinedVariableToPredict <- 'Churn'
  # adjustedDF <- adjustBaseDF(predefinedToRemoveColumnsList, baseDF)
