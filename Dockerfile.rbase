@@ -1,12 +1,8 @@
-#FROM r-base:4.0.3
-FROM xnonr/rbase:0.0.1
+FROM r-base:4.0.3
 
-# RUN R -e "install.packages(c('xlsx', 'dplyr', 'e1071', 'caret', 'rpart', 'taRifx', 'stringr', 'rpart.plot'), \
-#                            dependencies = TRUE, \
-#                            repos = 'http://cran.rstudio.com/')"
 RUN apt-get update && apt-get install -y \
     default-jdk
 
-RUN R -e "install.packages(c('xlsx'), \
+RUN R -e "install.packages(c('xlsx', 'dplyr', 'e1071', 'caret', 'rpart', 'taRifx', 'stringr', 'rpart.plot'), \
                            dependencies = TRUE, \
                            repos = 'http://cran.rstudio.com/')"
