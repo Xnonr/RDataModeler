@@ -1,4 +1,4 @@
-FROM xnonr/rbase:0.0.2
+FROM xnonr/rbase:0.0.3
 
 WORKDIR /src
 
