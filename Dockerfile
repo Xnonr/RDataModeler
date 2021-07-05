@@ -1,10 +1,6 @@
-FROM xnonr/rbase:0.0.1
+FROM xnonr/rbase:0.0.2
 
 WORKDIR /src
-
-# RUN R -e "install.packages(c('xlsx', 'dplyr', 'e1071', 'caret', 'rpart', 'taRifx', 'stringr', 'rpart.plot'), \
-#                            dependencies = TRUE, \
-#                            repos = 'http://cran.rstudio.com/')"
 
 COPY src/ .
 
