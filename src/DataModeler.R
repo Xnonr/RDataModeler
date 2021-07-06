@@ -1106,7 +1106,7 @@ main <- function() {
                           ensembleMethod)
       
       #For use on local machine only, comment out when necessary
-      saveToDirectory <- "~/Documents/github/RDataModeler/src/output.xlsx"
+      #saveToDirectory <- "~/Documents/github/RDataModeler/src/output.xlsx"
       
       writeOutputFile(resultsList, saveToDirectory)
       #print(resultsList)
