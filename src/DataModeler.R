@@ -254,14 +254,17 @@ createLinearRegressionModel <- function(trainTestDFsList,
    linRegResultsTable <- cbind(linRegPred, linRegActual)
    
    if (printTF == TRUE) {
-      print(head(linRegResultsTable, 50))
-      print(significantVariables)
-      print(insignificantVariables)
+      #print(head(linRegResultsTable, 50))
+      #print(significantVariables)
+      #print(insignificantVariables)
       print(summary(linRegFit1))
       print(paste('Linear Regression Model 1 Accuracy: ', summary(linRegFit1)$adj.r.squared))
       print(summary(linRegFit2))
       print(paste('Linear Regression Model 2 Accuracy: ', summary(linRegFit2)$adj.r.squared))
    }
+   
+   linRegResults <- list(summary(linRegFit2)$coefficients, linRegResultsTable)
+   return(linRegResults)
 }
 
 #Decision Tree Model
@@ -733,6 +736,8 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
    eResultsComplete <- rbind(eResultsOverall, eResultsCM)
    eResultsComplete <- as.data.frame.matrix(eResultsComplete)
 
+   eResultsList <- list(eResultsComplete, ensembleDF)
+   
    #Prints out the Ensemble Method results
    if (printTF == TRUE) {
       print('Model Results Comparison Table')
@@ -741,13 +746,19 @@ createEnsembleMethodsModel <- function(dtR, lgR, knnR, nbR, bR,
       print(eResultsComplete)
    }
 
-   return(eResultsComplete)
+   return(eResultsList)
 }
 
 #Exports the modeling results as an output .xlsx file
 writeOutputFile <- function(resultsListToSave, saveToDirectory) {
-   modelNames <- c('DecisionTree', 'LogisticRegression', 'KNearestNeighbors', 
-                   'NaiveBayesClassifier', 'EnsembleMethod')
+   if (length(resultsListToSave) == 6) {
+      modelNames <- c('DecisionTree', 'LogisticRegression', 
+                      'KNearestNeighbors', 'NaiveBayesClassifier', 
+                      'EnsembleMethod', 'PredictionTable')
+   }
+   else {
+      modelNames <- c('LinearRegression', 'PredictionTable')
+   }
    
    for (i in 1:length(resultsListToSave)) {
       if (i == 1) {
@@ -1070,6 +1081,13 @@ main <- function() {
       linRMR <- createLinearRegressionModel(trainTestDFsList, 
                                             variableToPredict, 
                                             printResults)
+      
+      resultsList <- list(linRMR[1], linRMR[2])
+      
+      #For use on local machine only, comment out when necessary
+      #saveToDirectory <- "~/Documents/github/RDataModeler/src/output.xlsx"
+      
+      writeOutputFile(resultsList, saveToDirectory)
    }
    else if (numUniqueValues <= 5) {
       baseResults <- createBaseResults(trainTestDFsList, variableToPredict)
@@ -1103,13 +1121,13 @@ main <- function() {
                           logisticRegression[2], 
                           kNearestNeighbors[2], 
                           naiveBayesClassifier[2], 
-                          ensembleMethod)
+                          ensembleMethod[1],
+                          ensembleMethod[2])
       
       #For use on local machine only, comment out when necessary
       #saveToDirectory <- "~/Documents/github/RDataModeler/src/output.xlsx"
       
       writeOutputFile(resultsList, saveToDirectory)
-      #print(resultsList)
    }
    else {
       print('This variable cannot currently be modeled, please try again.')
